@@ -1,0 +1,16 @@
+{
+  "name": "doctor-channelling",
+  "version": "1.0.0",
+  "description": "MediChannel - Doctor Channelling Online Platform (MERN Stack)",
+  "scripts": {
+    "install-all": "npm install --prefix backend && npm install --prefix frontend",
+    "seed": "node backend/seed.js",
+    "server": "npm run dev --prefix backend",
+    "client": "npm start --prefix frontend",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "npm run build --prefix frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
