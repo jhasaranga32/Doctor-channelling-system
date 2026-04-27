@@ -7,11 +7,14 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 // Pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import PatientDashboard from './pages/PatientDashboard';
-import DoctorDashboard from './pages/DoctorDashboard';
-import StaffDashboard from './pages/StaffDashboard';
+import PatientDashboard from './pages/User/PatientDashboard';
+import DoctorDashboard from './pages/Doctor/DoctorDashboard';
+import StaffDashboard from './pages/Staff/StaffDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Homepage from './pages/Homepage';
+import DoctorManagement from './pages/Staff/DoctorManagement';
+import AddDoctor from './pages/Staff/Adddoctor';
+import DoctorsPage from './pages/User/Doctorspage';
 
 function App() {
   return (
@@ -30,44 +33,61 @@ function App() {
 
 
 
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/" element={<Homepage />} />
+       <Routes>
+  {/* Public Routes */}
+  <Route path="/login" element={<LoginPage />} />
+  <Route path="/register" element={<RegisterPage />} />
+  <Route path="/" element={<Homepage />} />
 
-          {/* Patient Dashboard */}
-          <Route path="/dashboard" element={
-            <ProtectedRoute allowedRoles={['patient']}>
-              <PatientDashboard />
-            </ProtectedRoute>
-          } />
+  {/* Patient Dashboard */}
+  <Route path="/dashboard" element={
+    <ProtectedRoute allowedRoles={['patient']}>
+      <PatientDashboard />
+    </ProtectedRoute>
+  } />
 
-          {/* Doctor Dashboard */}
-          <Route path="/doctor/dashboard" element={
-            <ProtectedRoute allowedRoles={['doctor']}>
-              <DoctorDashboard />
-            </ProtectedRoute>
-          } />
+  {/* Doctor Dashboard */}
+  <Route path="/doctor/dashboard" element={
+    <ProtectedRoute allowedRoles={['doctor']}>
+      <DoctorDashboard />
+    </ProtectedRoute>
+  } />
 
-          {/* Staff Dashboard */}
-          <Route path="/staff/dashboard" element={
-            <ProtectedRoute allowedRoles={['staff']}>
-              <StaffDashboard />
-            </ProtectedRoute>
-          } />
+  {/* Staff Dashboard */}
+  <Route path="/staff/dashboard" element={
+    <ProtectedRoute allowedRoles={['staff']}>
+      <StaffDashboard />
+    </ProtectedRoute>
+  } />
 
-          {/* Admin Dashboard */}
-          <Route path="/admin/dashboard" element={
-            <ProtectedRoute allowedRoles={['admin']}>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
+  {/* Admin Dashboard */}
+  <Route path="/admin/dashboard" element={
+    <ProtectedRoute allowedRoles={['admin']}>
+      <AdminDashboard />
+    </ProtectedRoute>
+  } />
 
-          {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+  {/* Add Doctor */}
+  <Route path="/add-doctor" element={
+    <ProtectedRoute allowedRoles={['admin']}>
+      <AddDoctor />
+    </ProtectedRoute>
+  } />
+
+  {/* Doctors Page */}
+  <Route path="/doctors" element={
+    <DoctorsPage />
+  } />
+  <Route path="/doctormanagement" element={<DoctorManagement/>} />
+  <Route path="/adddoctor" element={<AddDoctor/>} />
+
+  {/* Redirects */}
+  <Route path="*" element={<Navigate to="/login" replace />} />
+</Routes>
+
+
+
+
       </Router>
     </AuthProvider>
   );

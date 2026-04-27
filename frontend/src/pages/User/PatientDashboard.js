@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { authAPI } from '../utils/api';
+import { useAuth } from '../../context/AuthContext';
+import { authAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
 
 const PatientDashboard = () => {

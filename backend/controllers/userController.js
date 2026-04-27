@@ -133,11 +133,21 @@ exports.createAdmin = async (req, res) => {
   }
 };
 
-// @desc    Update any user (Admin)
+// @desc    Update any user (Admin) or Doctor (Staff)
 // @route   PUT /api/users/:id
-// @access  Admin
+// @access  Admin, Staff (doctors only)
 exports.updateUser = async (req, res) => {
   try {
+    const targetUser = await User.findById(req.params.id);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Staff can only update doctors
+    if (req.user.role === 'staff' && targetUser.role !== 'doctor') {
+      return res.status(403).json({ success: false, message: 'Staff can only update doctor accounts.' });
+    }
+
     const forbiddenFields = ['password', 'email', 'role'];
     forbiddenFields.forEach((f) => delete req.body[f]);
 
@@ -145,10 +155,6 @@ exports.updateUser = async (req, res) => {
       new: true,
       runValidators: true,
     }).select('-password');
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found.' });
-    }
 
     res.status(200).json({ success: true, message: 'User updated successfully.', user });
   } catch (error) {
@@ -184,14 +190,19 @@ exports.toggleUserStatus = async (req, res) => {
   }
 };
 
-// @desc    Delete user (soft delete by deactivating)
+// @desc    Delete user (Admin) or Doctor (Staff)
 // @route   DELETE /api/users/:id
-// @access  Admin
+// @access  Admin, Staff (doctors only)
 exports.deleteUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Staff can only delete doctors
+    if (req.user.role === 'staff' && user.role !== 'doctor') {
+      return res.status(403).json({ success: false, message: 'Staff can only delete doctor accounts.' });
     }
 
     if (user._id.toString() === req.user.id) {
