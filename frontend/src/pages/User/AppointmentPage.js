@@ -150,8 +150,13 @@ const AppointmentPage = () => {
           </div>
           <button
             onClick={() => {
-              setDoctor(null);
-              setFormData({ ...formData, doctorId: '', appointmentDate: '', appointmentTime: '09:00', reason: '' });
+              setDoctor(selectedDoctorFromState || null);
+              setFormData({
+                doctorId: selectedDoctorFromState?._id || doctorIdFromQuery || '',
+                appointmentDate: '',
+                appointmentTime: '09:00',
+                reason: ''
+              });
               setEditId(null);
             }}
             className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
@@ -179,13 +184,17 @@ const AppointmentPage = () => {
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">Doctor</label>
                 <select
-                  className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                  className={`w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 ${
+                    selectedDoctorFromState ? 'cursor-not-allowed bg-slate-100 opacity-75' : ''
+                  }`}
                   value={formData.doctorId}
                   onChange={(e) => {
+                    if (selectedDoctorFromState) return; // Prevent changes when doctor is pre-selected
                     setFormData((prev) => ({ ...prev, doctorId: e.target.value }));
                     const selected = doctors.find((doc) => doc._id === e.target.value);
                     if (selected) setDoctor(selected);
                   }}
+                  disabled={!!selectedDoctorFromState}
                   required
                 >
                   <option value="">Select a doctor</option>
@@ -198,6 +207,9 @@ const AppointmentPage = () => {
                     </option>
                   ))}
                 </select>
+                {selectedDoctorFromState && (
+                  <p className="mt-1 text-xs text-slate-500">Doctor selection is locked when booking from doctor profile</p>
+                )}
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">

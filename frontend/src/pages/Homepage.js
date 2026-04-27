@@ -127,7 +127,7 @@ function ProfileDropdown({ user, navScrolled, onLogout }) {
 
   const menuItems = [
     { icon:'👤', label:'My Profile',      path:'/patient/profile' },
-    { icon:'📅', label:'My Appointments', path:'/patient/appointments' },
+    { icon:'📅', label:'My Appointments', path:'/appointments' },
     { icon:'📋', label:'Health Records',  path:'/patient/records' },
     { icon:'⚙️', label:'Settings',        path:'/patient/settings' },
   ];
