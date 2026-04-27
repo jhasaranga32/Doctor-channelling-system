@@ -2,8 +2,10 @@
 // pages/DoctorsPage.jsx
 // Public-facing page: Users browse doctors by specialization, search, filter
 // Connects to: GET /api/doctors  &  GET /api/doctors/specializations
+// Updated to use navigate for appointment booking
 
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from 'react-router-dom';
 
 const API_BASE = "/api";
 
@@ -109,6 +111,7 @@ export default function DoctorsPage() {
     return ["All", ...Array.from(s).sort()];
   }, [doctors]);
 
+  const navigate = useNavigate();
   const filtered = useMemo(() => {
     return doctors.filter((d) => {
       const q = search.toLowerCase();
@@ -480,6 +483,7 @@ function DoctorListRow({ doc, onClick }) {
 // Doctor Modal (Full Detail)
 // ─────────────────────────────────────────────────────────────────────────────
 function DoctorModal({ doc, onClose }) {
+  const navigate = useNavigate();
   const color = SPEC_COLORS[doc.specialization] || "#6366f1";
   const bg    = avatarColor(doc.name);
   const ALL_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -613,7 +617,7 @@ function DoctorModal({ doc, onClose }) {
           {/* Book button */}
           <button
             className="mt-5 w-full rounded-[14px] bg-[#0c1220] py-3.5 text-[15px] font-bold tracking-[.3px] text-white transition-colors hover:bg-[#1e293b]"
-            onClick={() => alert(`Booking with Dr. ${doc.name}`)}
+            onClick={() => navigate(`/appointments?doctorId=${doc._id}`, { state: { doctor: doc } })}
           >
             📅 Book Appointment
           </button>

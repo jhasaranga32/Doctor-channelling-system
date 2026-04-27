@@ -10,7 +10,7 @@ const LoginPage = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
 
   const getDashboardPath = (role) => {
-    const paths = { admin: '/admin/dashboard', doctor: '/doctor/dashboard', staff: '/staff/dashboard', patient: '/dashboard' };
+    const paths = { admin: '/admin/dashboard', doctor: '/doctor/dashboard', staff: '/staff/dashboard', patient: '/' };
     return paths[role] || '/dashboard';
   };
 

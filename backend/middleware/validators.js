@@ -61,6 +61,20 @@ exports.updateProfileRules = [
   body('phone').optional().matches(/^\+?[\d\s\-()]{7,15}$/).withMessage('Please enter a valid phone number'),
 ];
 
+// Appointment validation
+exports.appointmentCreateRules = [
+  body('doctorId').notEmpty().withMessage('Doctor is required'),
+  body('appointmentDate').notEmpty().withMessage('Appointment date is required').isISO8601().withMessage('Invalid date format'),
+  body('appointmentTime').notEmpty().withMessage('Appointment time is required').matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format'),
+  body('reason').optional().trim().isLength({ max: 500 }).withMessage('Reason must be 500 characters or less'),
+];
+
+exports.appointmentUpdateRules = [
+  body('appointmentDate').optional().isISO8601().withMessage('Invalid date format'),
+  body('appointmentTime').optional().matches(/^([01]\d|2[0-3]):([0-5]\d)$/).withMessage('Invalid time format'),
+  body('reason').optional().trim().isLength({ max: 500 }).withMessage('Reason must be 500 characters or less'),
+];
+
 // Change password validation
 exports.changePasswordRules = [
   body('currentPassword').notEmpty().withMessage('Current password is required'),

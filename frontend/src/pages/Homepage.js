@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 /* ─── Google Fonts injected once ─── */
 const injectFonts = () => {
@@ -50,6 +51,7 @@ const CSS = `
 @keyframes float    { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-12px);} }
 @keyframes shimmer  { 0%{background-position:200% center;} 100%{background-position:-200% center;} }
 @keyframes scrollDown { 0%{transform:translateY(0);opacity:1;} 100%{transform:translateY(10px);opacity:0;} }
+@keyframes dropIn   { from{opacity:0;transform:translateY(-10px) scale(0.97);} to{opacity:1;transform:translateY(0) scale(1);} }
 
 .nav-link { position:relative; }
 .nav-link::after {
@@ -67,6 +69,7 @@ const CSS = `
 .btn-white:hover    { background:#f0fdfa !important; transform:translateY(-2px); }
 
 .testimonial-card:hover { box-shadow:0 20px 40px rgba(0,0,0,0.08) !important; }
+.profile-menu-item:hover { background:#f0fdfa !important; color:#0d9488 !important; }
 
 input:focus, textarea:focus, select:focus {
   outline:none; border-color:#14b8a6 !important; box-shadow:0 0 0 3px rgba(20,184,166,0.15);
@@ -75,15 +78,188 @@ input:focus, textarea:focus, select:focus {
 html { scroll-behavior:smooth; }
 `;
 
+/* ══════════════════════════════════════════
+   USER AVATAR — shows initials or profile photo
+══════════════════════════════════════════ */
+function UserAvatar({ user, size = 36 }) {
+  const name = user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.name || '?';
+  const initials = name
+    .split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+  const palette = ['#0d9488','#0891b2','#7c3aed','#db2777','#ea580c','#16a34a'];
+  const colorIdx = (name || '').charCodeAt(0) % palette.length;
+  const bg  = palette[colorIdx];
+  const bg2 = palette[(colorIdx + 2) % palette.length];
+
+  if (user.profilePic) {
+    return (
+      <img src={user.profilePic} alt={name}
+        style={{ width:size, height:size, borderRadius:'50%', objectFit:'cover',
+          border:'2px solid #14b8a6', flexShrink:0 }} />
+    );
+  }
+  return (
+    <div style={{
+      width:size, height:size, borderRadius:'50%', flexShrink:0,
+      background:`linear-gradient(135deg,${bg},${bg2})`,
+      display:'flex', alignItems:'center', justifyContent:'center',
+      color:'#fff', fontWeight:800, fontSize:size * 0.36,
+      fontFamily:"'DM Sans',sans-serif", border:'2px solid rgba(255,255,255,0.25)',
+    }}>{initials}</div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   PROFILE DROPDOWN
+══════════════════════════════════════════ */
+function ProfileDropdown({ user, navScrolled, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const fullName = user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.name || 'Patient';
+
+  const menuItems = [
+    { icon:'👤', label:'My Profile',      path:'/patient/profile' },
+    { icon:'📅', label:'My Appointments', path:'/patient/appointments' },
+    { icon:'📋', label:'Health Records',  path:'/patient/records' },
+    { icon:'⚙️', label:'Settings',        path:'/patient/settings' },
+  ];
+
+  return (
+    <div ref={ref} style={{ position:'relative' }}>
+
+      {/* Trigger */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display:'flex', alignItems:'center', gap:'0.55rem',
+          padding:'0.28rem 0.85rem 0.28rem 0.28rem', borderRadius:50,
+          border: navScrolled ? '1.5px solid #99f6e4' : '1.5px solid rgba(255,255,255,0.3)',
+          background: navScrolled ? '#f0fdfa' : 'rgba(255,255,255,0.12)',
+          cursor:'pointer', transition:'all 0.25s',
+        }}
+      >
+        <UserAvatar user={user} size={34} />
+        <div style={{ lineHeight:1.25, textAlign:'left' }}>
+          <div style={{
+            fontWeight:700, fontSize:'0.8rem',
+            color: navScrolled ? '#0f172a' : '#fff',
+            maxWidth:90, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+          }}>
+            {(fullName || 'Patient').split(' ')[0]}
+          </div>
+          <div style={{ fontSize:'0.62rem', color: navScrolled ? '#0d9488' : 'rgba(255,255,255,0.65)' }}>
+            Patient
+          </div>
+        </div>
+        <span style={{
+          fontSize:'0.55rem', marginLeft:2,
+          color: navScrolled ? '#94a3b8' : 'rgba(255,255,255,0.55)',
+          display:'inline-block',
+          transform: open ? 'rotate(180deg)' : 'rotate(0)',
+          transition:'transform 0.2s',
+        }}>▼</span>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position:'absolute', top:'calc(100% + 12px)', right:0, width:268,
+          background:'#fff', borderRadius:18, zIndex:2000,
+          boxShadow:'0 20px 60px rgba(0,0,0,0.14)', border:'1px solid #e2e8f0',
+          overflow:'hidden', animation:'dropIn 0.2s ease both',
+        }}>
+          {/* User header */}
+          <div style={{
+            padding:'1.2rem', display:'flex', alignItems:'center', gap:'0.85rem',
+            background:'linear-gradient(135deg,#f0fdfa,#ccfbf1)',
+            borderBottom:'1px solid #e2e8f0',
+          }}>
+            <UserAvatar user={user} size={48} />
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontWeight:700, color:'#0f172a', fontSize:'0.92rem',
+                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {fullName}
+              </div>
+              <div style={{ color:'#64748b', fontSize:'0.72rem', marginTop:2,
+                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {user.email}
+              </div>
+              <div style={{
+                display:'inline-flex', alignItems:'center', gap:4, marginTop:5,
+                background:'#0d9488', borderRadius:50, padding:'0.14rem 0.55rem',
+              }}>
+                <span style={{ width:5, height:5, borderRadius:'50%', background:'#4ade80', display:'inline-block' }}/>
+                <span style={{ color:'#fff', fontSize:'0.6rem', fontWeight:700 }}>ACTIVE PATIENT</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Menu */}
+          <div style={{ padding:'0.4rem' }}>
+            {menuItems.map(item => (
+              <button key={item.label}
+                className="profile-menu-item"
+                onClick={() => { navigate(item.path); setOpen(false); }}
+                style={{
+                  width:'100%', display:'flex', alignItems:'center', gap:'0.7rem',
+                  padding:'0.65rem 0.85rem', border:'none', background:'none',
+                  cursor:'pointer', borderRadius:10, color:'#334155',
+                  fontFamily:"'DM Sans',sans-serif", fontSize:'0.875rem', fontWeight:500,
+                  transition:'background 0.15s, color 0.15s', textAlign:'left',
+                }}>
+                <span style={{ width:22, textAlign:'center', fontSize:'1rem' }}>{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Logout */}
+          <div style={{ borderTop:'1px solid #e2e8f0', padding:'0.4rem' }}>
+            <button
+              onClick={() => { onLogout(); setOpen(false); }}
+              style={{
+                width:'100%', display:'flex', alignItems:'center', gap:'0.7rem',
+                padding:'0.65rem 0.85rem', border:'none', background:'none',
+                cursor:'pointer', borderRadius:10, color:'#ef4444',
+                fontFamily:"'DM Sans',sans-serif", fontSize:'0.875rem', fontWeight:600,
+                transition:'background 0.15s', textAlign:'left',
+              }}
+              onMouseOver={e => e.currentTarget.style.background='#fef2f2'}
+              onMouseOut={e  => e.currentTarget.style.background='none'}
+            >
+              <span style={{ width:22, textAlign:'center', fontSize:'1rem' }}>🚪</span>
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   MAIN LANDING PAGE
+══════════════════════════════════════════ */
 export default function LandingPage() {
-  const [navScrolled, setNavScrolled] = useState(false);
-  const [menuOpen,    setMenuOpen]    = useState(false);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const [navScrolled,   setNavScrolled]   = useState(false);
+  const [menuOpen,      setMenuOpen]      = useState(false);
   const [activeSection, setActiveSection] = useState('home');
-  const [formData, setFormData] = useState({ name:'', email:'', phone:'', doctor:'', date:'', message:'' });
-  const [contactForm, setContactForm] = useState({ name:'', email:'', subject:'', message:'' });
-  const [submitted, setSubmitted] = useState(false);
-  const [contactSent, setContactSent] = useState(false);
-  const [testIdx, setTestIdx] = useState(0);
+  const [formData,      setFormData]      = useState({ name:'', email:'', phone:'', doctor:'', date:'', message:'' });
+  const [contactForm,   setContactForm]   = useState({ name:'', email:'', subject:'', message:'' });
+  const [submitted,     setSubmitted]     = useState(false);
+  const [contactSent,   setContactSent]   = useState(false);
+  const [testIdx,       setTestIdx]       = useState(0);
 
   useEffect(() => {
     injectFonts();
@@ -97,7 +273,7 @@ export default function LandingPage() {
     const onScroll = () => {
       setNavScrolled(window.scrollY > 60);
       const sections = ['home','about','services','doctors','appointment','contact'];
-      for (const id of sections.reverse()) {
+      for (const id of [...sections].reverse()) {
         const el = document.getElementById(id);
         if (el && window.scrollY >= el.offsetTop - 100) { setActiveSection(id); break; }
       }
@@ -130,14 +306,12 @@ export default function LandingPage() {
     setContactForm({ name:'', email:'', subject:'', message:'' });
   };
 
-  /* ─── NAV ─── */
   const NAV_LINKS = [
-    { id:'home',        label:'Home' },
-    { id:'about',       label:'About Us' },
-    { id:'services',    label:'Services' },
-    { id:'doctors',     label:'Doctors' },
-  
-    { id:'contact',     label:'Contact Us' },
+    { id:'home',     label:'Home' },
+    { id:'about',    label:'About Us' },
+    { id:'services', label:'Services' },
+    { id:'doctors',  label:'Doctors' },
+    { id:'contact',  label:'Contact Us' },
   ];
 
   return (
@@ -153,6 +327,7 @@ export default function LandingPage() {
         padding: navScrolled ? '0.75rem 0' : '1.25rem 0',
       }}>
         <div style={{ maxWidth:1200, margin:'0 auto', padding:'0 2rem', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+
           {/* Logo */}
           <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', cursor:'pointer' }} onClick={() => scrollTo('home')}>
             <div style={{
@@ -181,12 +356,18 @@ export default function LandingPage() {
                 {l.label}
               </button>
             ))}
-            <Link to="/login" style={{
-              padding:'0.55rem 1.4rem', borderRadius:50,
-              background:'linear-gradient(135deg,#0d9488,#14b8a6)',
-              color:'#fff', textDecoration:'none', fontWeight:600, fontSize:'0.875rem',
-              boxShadow:'0 4px 14px rgba(20,184,166,0.4)', transition:'all 0.25s',
-            }} className="btn-primary">Sign In</Link>
+
+            {/* ── Show profile dropdown if logged in, else Sign In button ── */}
+            {user ? (
+              <ProfileDropdown user={user} navScrolled={navScrolled} onLogout={logout} />
+            ) : (
+              <Link to="/login" style={{
+                padding:'0.55rem 1.4rem', borderRadius:50,
+                background:'linear-gradient(135deg,#0d9488,#14b8a6)',
+                color:'#fff', textDecoration:'none', fontWeight:600, fontSize:'0.875rem',
+                boxShadow:'0 4px 14px rgba(20,184,166,0.4)', transition:'all 0.25s',
+              }} className="btn-primary">Sign In</Link>
+            )}
           </div>
 
           {/* Hamburger */}
@@ -202,16 +383,43 @@ export default function LandingPage() {
             background:'#fff', padding:'1rem 2rem 1.5rem', borderTop:'1px solid #e2e8f0',
             display:'flex', flexDirection:'column', gap:'1rem',
           }}>
+            {/* Mobile: show user card if logged in */}
+            {user && (
+              <div style={{
+                display:'flex', alignItems:'center', gap:'0.85rem',
+                padding:'0.85rem 1rem', background:'#f0fdfa',
+                border:'1px solid #99f6e4', borderRadius:14, marginBottom:'0.25rem',
+              }}>
+                <UserAvatar user={user} size={42} />
+                <div>
+                  <div style={{ fontWeight:700, color:'#0f172a', fontSize:'0.9rem' }}>{user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.name}</div>
+                  <div style={{ color:'#0d9488', fontSize:'0.75rem' }}>{user.email}</div>
+                </div>
+              </div>
+            )}
             {NAV_LINKS.map(l => (
               <button key={l.id} onClick={() => scrollTo(l.id)}
                 style={{ background:'none', border:'none', cursor:'pointer', textAlign:'left', fontWeight:600, color:'#334155', fontSize:'1rem', padding:'0.5rem 0' }}>
                 {l.label}
               </button>
             ))}
-            <Link to="/login" onClick={() => setMenuOpen(false)}
-              style={{ padding:'0.7rem', background:'#14b8a6', color:'#fff', borderRadius:10, textAlign:'center', textDecoration:'none', fontWeight:700 }}>
-              Sign In
-            </Link>
+            {user ? (
+              <>
+                <button onClick={() => { navigate('/patient/profile'); setMenuOpen(false); }}
+                  style={{ padding:'0.7rem', background:'#f0fdfa', color:'#0d9488', border:'1px solid #99f6e4', borderRadius:10, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  👤 My Profile
+                </button>
+                <button onClick={() => { logout(); setMenuOpen(false); }}
+                  style={{ padding:'0.7rem', background:'#fef2f2', color:'#ef4444', border:'1px solid #fecaca', borderRadius:10, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
+                  🚪 Sign Out
+                </button>
+              </>
+            ) : (
+              <Link to="/login" onClick={() => setMenuOpen(false)}
+                style={{ padding:'0.7rem', background:'#14b8a6', color:'#fff', borderRadius:10, textAlign:'center', textDecoration:'none', fontWeight:700 }}>
+                Sign In
+              </Link>
+            )}
           </div>
         )}
       </nav>
@@ -222,7 +430,6 @@ export default function LandingPage() {
         background:'linear-gradient(135deg, #0f4c45 0%, #0d6e63 40%, #0a5a50 70%, #0f3d38 100%)',
         display:'flex', alignItems:'center',
       }}>
-        {/* Decorative circles */}
         {[
           { w:500, h:500, top:'-150px', right:'-100px', op:0.06 },
           { w:300, h:300, bottom:'50px', left:'-80px',  op:0.05 },
@@ -234,7 +441,6 @@ export default function LandingPage() {
             top:c.top, bottom:c.bottom, left:c.left, right:c.right, pointerEvents:'none',
           }}/>
         ))}
-        {/* Grid pattern */}
         <div style={{
           position:'absolute', inset:0, pointerEvents:'none',
           backgroundImage:'linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)',
@@ -242,7 +448,6 @@ export default function LandingPage() {
         }}/>
 
         <div style={{ maxWidth:1200, margin:'0 auto', padding:'8rem 2rem 5rem', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4rem', alignItems:'center', width:'100%' }}>
-          {/* Left */}
           <div style={{ animation:'fadeUp 0.9s ease both' }}>
             <div style={{
               display:'inline-flex', alignItems:'center', gap:'0.5rem',
@@ -252,6 +457,21 @@ export default function LandingPage() {
               <span style={{ width:8, height:8, borderRadius:'50%', background:'#4ade80', display:'inline-block', animation:'pulse 2s infinite' }}/>
               <span style={{ color:'rgba(255,255,255,0.9)', fontSize:'0.8rem', fontWeight:500, letterSpacing:'0.05em' }}>NOW ACCEPTING NEW PATIENTS</span>
             </div>
+
+            {/* Personalised welcome if logged in */}
+            {user && (
+              <div style={{
+                display:'inline-flex', alignItems:'center', gap:'0.75rem',
+                background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.35)',
+                borderRadius:14, padding:'0.6rem 1.1rem', marginBottom:'1.25rem',
+              }}>
+                <UserAvatar user={user} size={30} />
+                <span style={{ color:'#4ade80', fontWeight:600, fontSize:'0.9rem' }}>
+                  Welcome back, {(user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.name || 'Patient').split(' ')[0]}! 👋
+                </span>
+              </div>
+            )}
+
             <h1 style={{
               fontFamily:"'Playfair Display',serif", fontSize:'3.8rem', fontWeight:900,
               color:'#fff', lineHeight:1.1, marginBottom:'1.5rem',
@@ -282,7 +502,6 @@ export default function LandingPage() {
               }}>Learn More</button>
             </div>
 
-            {/* Mini stats */}
             <div style={{ display:'flex', gap:'2rem', marginTop:'3rem', paddingTop:'2rem', borderTop:'1px solid rgba(255,255,255,0.15)' }}>
               {[['15K+','Patients'],['50+','Doctors'],['98%','Satisfaction']].map(([v,l]) => (
                 <div key={l}>
@@ -293,7 +512,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Right — Hero card */}
           <div style={{ animation:'fadeUp 0.9s 0.2s ease both', display:'flex', justifyContent:'center' }}>
             <div style={{
               background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.12)',
@@ -330,7 +548,6 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
         <div style={{ position:'absolute', bottom:'2rem', left:'50%', transform:'translateX(-50%)', textAlign:'center' }}>
           <div style={{ color:'rgba(255,255,255,0.5)', fontSize:'0.75rem', letterSpacing:'0.1em', marginBottom:'0.5rem' }}>SCROLL</div>
           <div style={{ width:2, height:30, background:'linear-gradient(#14b8a6,transparent)', margin:'0 auto', animation:'scrollDown 1.5s ease infinite' }}/>
@@ -356,7 +573,6 @@ export default function LandingPage() {
       {/* ══════════════ ABOUT US ══════════════ */}
       <section id="about" style={{ padding:'6rem 2rem', background:'#fff' }}>
         <div style={{ maxWidth:1200, margin:'0 auto', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'5rem', alignItems:'center' }}>
-          {/* Left visual */}
           <div style={{ position:'relative' }}>
             <div style={{
               borderRadius:24, overflow:'hidden',
@@ -385,7 +601,6 @@ export default function LandingPage() {
                 ))}
               </div>
             </div>
-            {/* Floating badge */}
             <div style={{
               position:'absolute', top:-20, right:-20,
               background:'#fff', borderRadius:16, padding:'1rem 1.25rem',
@@ -397,7 +612,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Right content */}
           <div>
             <div style={{ color:'#14b8a6', fontWeight:700, fontSize:'0.8rem', letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:'1rem' }}>— ABOUT US</div>
             <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:'2.8rem', fontWeight:800, color:'#0f172a', lineHeight:1.15, marginBottom:'1.5rem' }}>
@@ -474,95 +688,89 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════════ DOCTORS ══════════════ */}
-    {/* ══════════════ DOCTORS ══════════════ */}
-<section id="doctors" style={{ padding:'6rem 2rem', background:'#fff' }}>
-  <div style={{ maxWidth:1200, margin:'0 auto' }}>
+      <section id="doctors" style={{ padding:'6rem 2rem', background:'#fff' }}>
+        <div style={{ maxWidth:1200, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:'4rem' }}>
+            <div style={{ color:'#14b8a6', fontWeight:700, fontSize:'0.8rem', letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:'1rem' }}>— MEET OUR TEAM</div>
+            <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:'2.8rem', fontWeight:800, color:'#0f172a', marginBottom:'1rem' }}>
+              Expert Doctors,<br/>Exceptional Care
+            </h2>
+            <p style={{ color:'#64748b', fontSize:'1rem', maxWidth:560, margin:'0 auto', lineHeight:1.8 }}>
+              Our team of nationally recognised specialists brings decades of clinical experience across every major medical field. Each doctor is carefully selected for their expertise, compassion, and commitment to delivering outstanding patient outcomes.
+            </p>
+          </div>
 
-    {/* Header */}
-    <div style={{ textAlign:'center', marginBottom:'4rem' }}>
-      <div style={{ color:'#14b8a6', fontWeight:700, fontSize:'0.8rem', letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:'1rem' }}>— MEET OUR TEAM</div>
-      <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize:'2.8rem', fontWeight:800, color:'#0f172a', marginBottom:'1rem' }}>
-        Expert Doctors,<br/>Exceptional Care
-      </h2>
-      <p style={{ color:'#64748b', fontSize:'1rem', maxWidth:560, margin:'0 auto', lineHeight:1.8 }}>
-        Our team of nationally recognised specialists brings decades of clinical experience across every major medical field. Each doctor is carefully selected for their expertise, compassion, and commitment to delivering outstanding patient outcomes.
-      </p>
-    </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'1.5rem', marginBottom:'3rem' }}>
+            {DOCTORS.slice(0,3).map((d,i) => (
+              <div key={i} className="doctor-card" style={{
+                background:'#fff', borderRadius:20, overflow:'hidden',
+                boxShadow:'0 4px 16px rgba(0,0,0,0.07)',
+                transition:'transform 0.3s, box-shadow 0.3s',
+              }}>
+                <div style={{
+                  height:160, background:`linear-gradient(135deg,${d.color}22,${d.color}44)`,
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:'3.5rem',
+                }}>{d.emoji}</div>
+                <div style={{ padding:'1.25rem' }}>
+                  <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:'1rem', fontWeight:700, color:'#0f172a', marginBottom:'0.3rem' }}>{d.name}</h3>
+                  <div style={{ color:'#0d9488', fontSize:'0.8rem', fontWeight:600, marginBottom:'0.75rem' }}>{d.spec}</div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.8rem', color:'#64748b', marginBottom:'1rem' }}>
+                    <span>🎓 {d.exp}</span>
+                    <span style={{ color:'#0d9488', fontWeight:700 }}>{d.fee}</span>
+                  </div>
+                  <button onClick={() => scrollTo('appointment')} style={{
+                    width:'100%', padding:'0.6rem', borderRadius:10,
+                    background:'linear-gradient(135deg,#f0fdfa,#ccfbf1)',
+                    border:'1px solid #99f6e4', color:'#0d9488',
+                    fontWeight:700, cursor:'pointer', fontSize:'0.8rem',
+                    fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s',
+                  }}>Book Appointment</button>
+                </div>
+              </div>
+            ))}
+          </div>
 
-    {/* Doctor cards — show only 3 as preview */}
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'1.5rem', marginBottom:'3rem' }}>
-      {DOCTORS.slice(0,3).map((d,i) => (
-        <div key={i} className="doctor-card" style={{
-          background:'#fff', borderRadius:20, overflow:'hidden',
-          boxShadow:'0 4px 16px rgba(0,0,0,0.07)',
-          transition:'transform 0.3s, box-shadow 0.3s',
-        }}>
           <div style={{
-            height:160, background:`linear-gradient(135deg,${d.color}22,${d.color}44)`,
-            display:'flex', alignItems:'center', justifyContent:'center', fontSize:'3.5rem',
-          }}>{d.emoji}</div>
-          <div style={{ padding:'1.25rem' }}>
-            <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:'1rem', fontWeight:700, color:'#0f172a', marginBottom:'0.3rem' }}>{d.name}</h3>
-            <div style={{ color:'#0d9488', fontSize:'0.8rem', fontWeight:600, marginBottom:'0.75rem' }}>{d.spec}</div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.8rem', color:'#64748b', marginBottom:'1rem' }}>
-              <span>🎓 {d.exp}</span>
-              <span style={{ color:'#0d9488', fontWeight:700 }}>{d.fee}</span>
+            background:'linear-gradient(135deg,#0f4c45,#0d6e63)',
+            borderRadius:24, padding:'3rem', display:'flex',
+            alignItems:'center', justifyContent:'space-between',
+            flexWrap:'wrap', gap:'2rem',
+          }}>
+            <div>
+              <div style={{ color:'#4ade80', fontWeight:700, fontSize:'0.8rem', letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:'0.75rem' }}>
+                50+ Specialists Available
+              </div>
+              <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:'1.8rem', fontWeight:800, color:'#fff', marginBottom:'0.75rem', lineHeight:1.2 }}>
+                Find the Right Doctor<br/>for Your Needs
+              </h3>
+              <p style={{ color:'rgba(255,255,255,0.7)', fontSize:'0.95rem', lineHeight:1.8, maxWidth:480 }}>
+                Browse our full directory of specialists, read their profiles, check availability, and book your appointment — all in one place.
+              </p>
             </div>
-            <button onClick={() => scrollTo('appointment')} style={{
-              width:'100%', padding:'0.6rem', borderRadius:10,
-              background:'linear-gradient(135deg,#f0fdfa,#ccfbf1)',
-              border:'1px solid #99f6e4', color:'#0d9488',
-              fontWeight:700, cursor:'pointer', fontSize:'0.8rem',
-              fontFamily:"'DM Sans',sans-serif", transition:'all 0.2s',
-            }}>Book Appointment</button>
+            <div style={{ display:'flex', flexDirection:'column', gap:'1rem', flexShrink:0 }}>
+              <Link to="/doctors" style={{
+                display:'inline-flex', alignItems:'center', gap:'0.5rem',
+                padding:'0.9rem 2rem', borderRadius:50,
+                background:'linear-gradient(135deg,#14b8a6,#0d9488)',
+                color:'#fff', textDecoration:'none', fontWeight:700, fontSize:'0.95rem',
+                boxShadow:'0 8px 24px rgba(20,184,166,0.4)', transition:'all 0.25s',
+                fontFamily:"'DM Sans',sans-serif",
+              }} className="btn-primary">
+                View All Doctors →
+              </Link>
+              <button onClick={() => scrollTo('appointment')} style={{
+                padding:'0.9rem 2rem', borderRadius:50,
+                border:'2px solid rgba(255,255,255,0.35)', background:'transparent',
+                color:'#fff', fontWeight:600, fontSize:'0.9rem', cursor:'pointer',
+                transition:'all 0.25s', fontFamily:"'DM Sans',sans-serif",
+                textAlign:'center',
+              }} className="btn-outline">
+                Book Appointment
+              </button>
+            </div>
           </div>
         </div>
-      ))}
-    </div>
-
-    {/* CTA banner to doctors page */}
-    <div style={{
-      background:'linear-gradient(135deg,#0f4c45,#0d6e63)',
-      borderRadius:24, padding:'3rem', display:'flex',
-      alignItems:'center', justifyContent:'space-between',
-      flexWrap:'wrap', gap:'2rem',
-    }}>
-      <div>
-        <div style={{ color:'#4ade80', fontWeight:700, fontSize:'0.8rem', letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:'0.75rem' }}>
-          50+ Specialists Available
-        </div>
-        <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:'1.8rem', fontWeight:800, color:'#fff', marginBottom:'0.75rem', lineHeight:1.2 }}>
-          Find the Right Doctor<br/>for Your Needs
-        </h3>
-        <p style={{ color:'rgba(255,255,255,0.7)', fontSize:'0.95rem', lineHeight:1.8, maxWidth:480 }}>
-          Browse our full directory of specialists, read their profiles, check availability, and book your appointment — all in one place.
-        </p>
-      </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:'1rem', flexShrink:0 }}>
-        <Link to="/doctors" style={{
-          display:'inline-flex', alignItems:'center', gap:'0.5rem',
-          padding:'0.9rem 2rem', borderRadius:50,
-          background:'linear-gradient(135deg,#14b8a6,#0d9488)',
-          color:'#fff', textDecoration:'none', fontWeight:700, fontSize:'0.95rem',
-          boxShadow:'0 8px 24px rgba(20,184,166,0.4)', transition:'all 0.25s',
-          fontFamily:"'DM Sans',sans-serif",
-        }} className="btn-primary">
-          View All Doctors →
-        </Link>
-        <button onClick={() => scrollTo('appointment')} style={{
-          padding:'0.9rem 2rem', borderRadius:50,
-          border:'2px solid rgba(255,255,255,0.35)', background:'transparent',
-          color:'#fff', fontWeight:600, fontSize:'0.9rem', cursor:'pointer',
-          transition:'all 0.25s', fontFamily:"'DM Sans',sans-serif",
-          textAlign:'center',
-        }} className="btn-outline">
-          Book Appointment
-        </button>
-      </div>
-    </div>
-
-  </div>
-</section>
+      </section>
 
       {/* ══════════════ TESTIMONIALS ══════════════ */}
       <section style={{ padding:'6rem 2rem', background:'linear-gradient(135deg,#0f4c45,#0d6e63)' }}>
@@ -603,7 +811,7 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════════ APPOINTMENT ══════════════ */}
-     
+
       {/* ══════════════ CONTACT US ══════════════ */}
       <section id="contact" style={{ padding:'6rem 2rem', background:'#fff' }}>
         <div style={{ maxWidth:1200, margin:'0 auto' }}>
@@ -616,7 +824,6 @@ export default function LandingPage() {
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4rem', alignItems:'start' }}>
-            {/* Contact info */}
             <div>
               <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem', marginBottom:'2.5rem' }}>
                 {[
@@ -641,7 +848,6 @@ export default function LandingPage() {
                   </div>
                 ))}
               </div>
-              {/* Social */}
               <div>
                 <div style={{ fontWeight:700, color:'#0f172a', marginBottom:'1rem', fontSize:'0.9rem' }}>Follow Us</div>
                 <div style={{ display:'flex', gap:'0.75rem' }}>
@@ -656,7 +862,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Contact form */}
             <div style={{ background:'#f8fafc', borderRadius:24, padding:'2.5rem', border:'1px solid #e2e8f0' }}>
               {contactSent ? (
                 <div style={{ textAlign:'center', padding:'2rem', animation:'fadeIn 0.4s ease' }}>
@@ -747,7 +952,6 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* Responsive style */}
       <style>{`
         @media(max-width:900px){
           .desktop-nav{ display:none !important; }

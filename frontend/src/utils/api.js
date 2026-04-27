@@ -49,4 +49,11 @@ export const userAPI = {
   getPublicDoctors: (params) => API.get('/users/doctors/public', { params }),
 };
 
+export const appointmentAPI = {
+  getAll: () => API.get('/appointments'),
+  create: (data) => API.post('/appointments', data),
+  update: (id, data) => API.put(`/appointments/${id}`, data),
+  delete: (id) => API.delete(`/appointments/${id}`),
+};
+
 export default API;

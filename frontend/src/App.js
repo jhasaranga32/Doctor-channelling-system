@@ -15,6 +15,7 @@ import Homepage from './pages/Homepage';
 import DoctorManagement from './pages/Staff/DoctorManagement';
 import AddDoctor from './pages/Staff/Adddoctor';
 import DoctorsPage from './pages/User/Doctorspage';
+import AppointmentPage from './pages/User/AppointmentPage';
 
 function App() {
   return (
@@ -77,6 +78,11 @@ function App() {
   {/* Doctors Page */}
   <Route path="/doctors" element={
     <DoctorsPage />
+  } />
+  <Route path="/appointments" element={
+    <ProtectedRoute allowedRoles={['patient']}>
+      <AppointmentPage />
+    </ProtectedRoute>
   } />
   <Route path="/doctormanagement" element={<DoctorManagement/>} />
   <Route path="/adddoctor" element={<AddDoctor/>} />
