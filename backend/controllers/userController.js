@@ -272,7 +272,7 @@ exports.getPublicDoctors = async (req, res) => {
 
     const total = await User.countDocuments(query);
     const doctors = await User.find(query)
-      .select('firstName lastName profileImage doctorDetails.specialization doctorDetails.consultationFee doctorDetails.rating doctorDetails.totalReviews doctorDetails.bio')
+      .select('-password')
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 

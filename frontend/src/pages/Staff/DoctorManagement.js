@@ -57,14 +57,13 @@ const DoctorManagement = () => {
     setEditForm({
       firstName:       doctor.firstName       || '',
       lastName:        doctor.lastName        || '',
-      email:           doctor.email           || '',
       specialization:  doctor.doctorDetails?.specialization || '',
+      licenseNumber:   doctor.doctorDetails?.licenseNumber || '',
       phone:           doctor.phone           || '',
       department:      doctor.doctorDetails?.department || '',
       qualification:   doctor.doctorDetails?.qualifications?.join(', ') || '',
       experience:      doctor.doctorDetails?.yearsOfExperience || '',
-      consultationFee: doctor.doctorDetails?.consultationFee || '',
-      status:          doctor.status          || 'active',
+      isActive:        doctor.isActive       || true,
       bio:             doctor.doctorDetails?.bio || '',
     });
   };
@@ -75,7 +74,34 @@ const DoctorManagement = () => {
     e.preventDefault();
     setEditSaving(true);
     try {
-      const res = await userAPI.update(editDoctor._id, editForm);
+      const payload = { ...editForm };
+      delete payload.email;
+
+      // Process qualifications
+      if (payload.qualification) {
+        payload.doctorDetails = {
+          ...payload.doctorDetails,
+          qualifications: payload.qualification.split(',').map(s => s.trim()).filter(Boolean),
+        };
+        delete payload.qualification;
+      }
+      // Move other fields to doctorDetails
+      payload.doctorDetails = {
+        ...payload.doctorDetails,
+        specialization: payload.specialization,
+        licenseNumber:  payload.licenseNumber,
+        department:     payload.department,
+        yearsOfExperience: Number(payload.experience) || 0,
+        bio: payload.bio,
+      };
+      // Remove fields that are not in user schema
+      delete payload.specialization;
+      delete payload.licenseNumber;
+      delete payload.department;
+      delete payload.experience;
+      delete payload.bio;
+
+      const res = await userAPI.update(editDoctor._id, payload);
       toast.success('Doctor updated successfully');
       setDoctors(prev =>
         prev.map(d => d._id === editDoctor._id ? { ...d, ...res.data?.user } : d)
@@ -175,8 +201,8 @@ const DoctorManagement = () => {
           <div style={{ display:'flex', gap:16, marginBottom:28 }}>
             {[
               { label:'Total Doctors', value:doctors.length,                                    color:'#4f7cff', bg:'#eef2ff' },
-              { label:'Active',        value:doctors.filter(d => d.status === 'active').length,  color:'#22c55e', bg:'#f0fdf4' },
-              { label:'Inactive',      value:doctors.filter(d => d.status !== 'active').length,  color:'#f43f5e', bg:'#fff1f2' },
+              { label:'Active',        value:doctors.filter(d => d.isActive).length,  color:'#22c55e', bg:'#f0fdf4' },
+              { label:'Inactive',      value:doctors.filter(d => !d.isActive).length,  color:'#f43f5e', bg:'#fff1f2' },
             ].map((stat) => (
               <div key={stat.label} style={{ background:'#fff', borderRadius:14, padding:'16px 24px', flex:1, boxShadow:'0 1px 4px rgba(15,23,42,0.07)', display:'flex', justifyContent:'space-between', alignItems:'center', border:'1px solid #e8edf5' }}>
                 <span style={{ fontSize:13, color:'#64748b', fontWeight:500 }}>{stat.label}</span>
@@ -210,7 +236,7 @@ const DoctorManagement = () => {
                 {filteredDoctors.map((doctor, i) => {
                   const initials = getInitials(doctor.firstName, doctor.lastName);
                   const avatarBg = getAvatarColor(doctor.firstName);
-                  const isActive = doctor.status === 'active';
+                  const isActive = doctor.isActive;
                   return (
                     <tr key={doctor._id} className="dm-row"
                       onMouseEnter={() => setHoveredRow(doctor._id)}
@@ -235,7 +261,7 @@ const DoctorManagement = () => {
                       <td style={{ padding:'14px 20px' }}>
                         <span style={{ fontSize:12, fontWeight:600, color: isActive ? '#16a34a' : '#dc2626', background: isActive ? '#f0fdf4' : '#fff1f2', borderRadius:20, padding:'4px 12px', display:'inline-flex', alignItems:'center', gap:5 }}>
                           <span style={{ width:6, height:6, borderRadius:'50%', background: isActive ? '#22c55e' : '#f43f5e', display:'inline-block' }} />
-                          {doctor.status ? doctor.status.charAt(0).toUpperCase() + doctor.status.slice(1) : 'Unknown'}
+                          {isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
 
@@ -297,14 +323,15 @@ const DoctorManagement = () => {
               <form onSubmit={handleEditSave}>
                 <div style={styles.formRow}>
                   <div style={styles.formField}>
-                    <label style={styles.label}>Full Name</label>
-                    <input className="edit-input" style={styles.input} value={editForm.name}
-                      onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required placeholder="Full name" />
+                    <label style={styles.label}>Doctor Name</label>
+                    <div style={{ ...styles.input, background: '#f8fafc', color: '#475569', minHeight: 44, display: 'flex', alignItems: 'center', padding: '10px 14px', borderRadius: 12, border: '1.5px solid #e2e8f0' }}>
+                      Dr. {editDoctor.firstName} {editDoctor.lastName}
+                    </div>
                   </div>
                   <div style={styles.formField}>
                     <label style={styles.label}>Email</label>
-                    <input className="edit-input" style={styles.input} type="email" value={editForm.email}
-                      onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} required placeholder="Email address" />
+                    <input className="edit-input" style={{ ...styles.input, background: '#f8fafc', cursor: 'not-allowed' }} type="email"
+                      value={editDoctor.email} readOnly placeholder="Email address" />
                   </div>
                 </div>
 
@@ -326,9 +353,9 @@ const DoctorManagement = () => {
 
                 <div style={styles.formRow}>
                   <div style={styles.formField}>
-                    <label style={styles.label}>Qualification</label>
-                    <input className="edit-input" style={styles.input} value={editForm.qualification}
-                      onChange={e => setEditForm(f => ({ ...f, qualification: e.target.value }))} placeholder="e.g. MBBS, MD" />
+                    <label style={styles.label}>License Number</label>
+                    <input className="edit-input" style={styles.input} value={editForm.licenseNumber}
+                      onChange={e => setEditForm(f => ({ ...f, licenseNumber: e.target.value }))} placeholder="e.g. SLMC-12345" />
                   </div>
                   <div style={styles.formField}>
                     <label style={styles.label}>Department</label>
@@ -339,14 +366,16 @@ const DoctorManagement = () => {
 
                 <div style={styles.formRow}>
                   <div style={styles.formField}>
+                    <label style={styles.label}>Qualification</label>
+                    <input className="edit-input" style={styles.input} value={editForm.qualification}
+                      onChange={e => setEditForm(f => ({ ...f, qualification: e.target.value }))} placeholder="e.g. MBBS, MD" />
+                  </div>
+                </div>
+                <div style={styles.formRow}>
+                  <div style={styles.formField}>
                     <label style={styles.label}>Experience (years)</label>
                     <input className="edit-input" style={styles.input} type="number" min="0" max="60" value={editForm.experience}
                       onChange={e => setEditForm(f => ({ ...f, experience: e.target.value }))} placeholder="e.g. 10" />
-                  </div>
-                  <div style={styles.formField}>
-                    <label style={styles.label}>Consultation Fee ($)</label>
-                    <input className="edit-input" style={styles.input} type="number" min="0" value={editForm.consultationFee}
-                      onChange={e => setEditForm(f => ({ ...f, consultationFee: e.target.value }))} placeholder="e.g. 150" />
                   </div>
                 </div>
 
@@ -354,12 +383,15 @@ const DoctorManagement = () => {
                 <div style={{ marginBottom:16 }}>
                   <label style={styles.label}>Status</label>
                   <div style={{ display:'flex', gap:10 }}>
-                    {[['active','✅ Active'],['inactive','❌ Inactive'],['on_leave','🏖 On Leave']].map(([val, label]) => (
-                      <button key={val} type="button" onClick={() => setEditForm(f => ({ ...f, status: val }))}
+                    {[
+                      { val: true, label: '✅ Active', color: '#22c55e', bg: '#f0fdf4', textColor: '#16a34a' },
+                      { val: false, label: '❌ Inactive', color: '#f43f5e', bg: '#fff1f2', textColor: '#dc2626' }
+                    ].map(({ val, label, color, bg, textColor }) => (
+                      <button key={String(val)} type="button" onClick={() => setEditForm(f => ({ ...f, isActive: val }))}
                         style={{ flex:1, padding:'9px 0', borderRadius:10, border:'1.5px solid', fontFamily:"'DM Sans', sans-serif", fontSize:13, fontWeight:600, cursor:'pointer', transition:'all .15s',
-                          borderColor: editForm.status === val ? (val==='active'?'#22c55e':val==='inactive'?'#f43f5e':'#f59e0b') : '#e2e8f0',
-                          background:  editForm.status === val ? (val==='active'?'#f0fdf4':val==='inactive'?'#fff1f2':'#fffbeb')  : '#fafafa',
-                          color:       editForm.status === val ? (val==='active'?'#16a34a':val==='inactive'?'#dc2626':'#d97706')  : '#94a3b8',
+                          borderColor: editForm.isActive === val ? color : '#e2e8f0',
+                          background:  editForm.isActive === val ? bg  : '#fafafa',
+                          color:       editForm.isActive === val ? textColor  : '#94a3b8',
                         }}>
                         {label}
                       </button>

@@ -3,18 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
-const ROLE_INFO = {
-  patient: { label: 'Patient', icon: '🧑‍⚕️', desc: 'Book and manage appointments' },
-  doctor: { label: 'Doctor', icon: '👨‍⚕️', desc: 'Manage your schedule & patients' },
-  staff: { label: 'Staff', icon: '👩‍💼', desc: 'Manage clinic operations' },
-  admin: { label: 'Admin', icon: '🛡️', desc: 'Full system administration' },
-};
-
 const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState('patient');
   const [formData, setFormData] = useState({ email: '', password: '' });
 
   const getDashboardPath = (role) => {
@@ -57,31 +49,14 @@ const LoginPage = () => {
       <div style={styles.rightPanel}>
         <div style={styles.card}>
           <h2 style={styles.title}>Sign In</h2>
-          <p style={styles.subtitle}>Choose your role and enter credentials</p>
-
-          {/* Role Selector */}
-          <div style={styles.roleGrid}>
-            {Object.entries(ROLE_INFO).map(([role, info]) => (
-              <button key={role} type="button"
-                onClick={() => setSelectedRole(role)}
-                style={{ ...styles.roleBtn, ...(selectedRole === role ? styles.roleBtnActive : {}) }}>
-                <span style={styles.roleIcon}>{info.icon}</span>
-                <span style={styles.roleLabel}>{info.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div style={styles.roleDesc}>
-            <span style={styles.roleDescIcon}>{ROLE_INFO[selectedRole].icon}</span>
-            {ROLE_INFO[selectedRole].desc}
-          </div>
+          <p style={styles.subtitle}>Enter your email and password to continue</p>
 
           <form onSubmit={handleSubmit}>
             <div style={styles.field}>
               <label style={styles.label}>Email Address</label>
               <input style={styles.input} type="email" value={formData.email}
                 onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))}
-                placeholder={`${selectedRole}@example.com`} required />
+                placeholder="you@example.com" required />
             </div>
             <div style={styles.field}>
               <label style={styles.label}>Password</label>
@@ -95,26 +70,14 @@ const LoginPage = () => {
             </div>
 
             <button type="submit" style={styles.btnSubmit} disabled={loading}>
-              {loading ? (
-                <span>Signing in...</span>
-              ) : (
-                <span>Sign In as {ROLE_INFO[selectedRole].label}</span>
-              )}
+              {loading ? <span>Signing in...</span> : <span>Sign In</span>}
             </button>
           </form>
 
-          {selectedRole === 'patient' && (
-            <p style={styles.registerNote}>
-              New patient?{' '}
-              <Link to="/register" style={styles.link}>Create a free account</Link>
-            </p>
-          )}
-
-          {selectedRole !== 'patient' && (
-            <p style={styles.registerNote} style={{ color: '#6c757d', fontSize: '0.85rem', textAlign: 'center', marginTop: '1rem' }}>
-              Staff, doctor & admin accounts are created by the administrator.
-            </p>
-          )}
+          <p style={styles.registerNote}>
+            New patient?{' '}
+            <Link to="/register" style={styles.link}>Create a free account</Link>
+          </p>
         </div>
       </div>
     </div>
