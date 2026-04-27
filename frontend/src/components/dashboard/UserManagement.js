@@ -76,8 +76,27 @@ const UserManagement = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      if (showModal === 'doctor') await userAPI.createDoctor(modalData);
-      else if (showModal === 'staff') await userAPI.createStaff(modalData);
+      if (showModal === 'doctor') {
+        const doctorDetails = modalData.doctorDetails || {};
+        const payload = {
+          ...modalData,
+          doctorDetails: {
+            ...doctorDetails,
+            qualifications: (doctorDetails.qualification || '')
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean),
+            availableSlots: (doctorDetails.availableDays || [])
+              .map((day) => ({
+                day,
+                startTime: doctorDetails.consultationHours?.start || '09:00',
+                endTime: doctorDetails.consultationHours?.end || '17:00',
+              })),
+          },
+        };
+        delete payload.doctorDetails.qualification;
+        await userAPI.createDoctor(payload);
+      } else if (showModal === 'staff') await userAPI.createStaff(modalData);
       else if (showModal === 'admin') await userAPI.createAdmin(modalData);
       toast.success(`${showModal.charAt(0).toUpperCase() + showModal.slice(1)} created successfully`);
       setShowModal(null);
@@ -105,7 +124,22 @@ const UserManagement = () => {
       <div style={styles.header}>
         <h1 style={styles.pageTitle}>User Management</h1>
         <div style={styles.createBtns}>
-          <button style={{ ...styles.createBtn, background: '#1565c0' }} onClick={() => { setShowModal('doctor'); setModalData({}); }}>+ Add Doctor</button>
+          <button style={{ ...styles.createBtn, background: '#1565c0' }} onClick={() => {
+            setShowModal('doctor');
+            setModalData({
+              doctorDetails: {
+                specialization: '',
+                licenseNumber: '',
+                qualification: '',
+                yearsOfExperience: '',
+                department: '',
+                consultationFee: '',
+                bio: '',
+                availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+                consultationHours: { start: '09:00', end: '17:00' },
+              },
+            });
+          }}>+ Add Doctor</button>
           <button style={{ ...styles.createBtn, background: '#e65100' }} onClick={() => { setShowModal('staff'); setModalData({}); }}>+ Add Staff</button>
           <button style={{ ...styles.createBtn, background: '#c62828' }} onClick={() => { setShowModal('admin'); setModalData({}); }}>+ Add Admin</button>
         </div>
@@ -271,10 +305,11 @@ const UserManagement = () => {
                   </div>
                   <div style={styles.formRow}>
                     <div style={styles.formField}>
-                      <label style={styles.formLabel}>Consultation Fee (LKR) *</label>
-                      <input style={styles.formInput} type="number" required
-                        value={modalData.doctorDetails?.consultationFee || ''}
-                        onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, consultationFee: e.target.value } }))} />
+                      <label style={styles.formLabel}>Qualifications *</label>
+                      <input style={styles.formInput} required
+                        value={modalData.doctorDetails?.qualification || ''}
+                        onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, qualification: e.target.value } }))}
+                        placeholder="e.g. MBBS, MD" />
                     </div>
                     <div style={styles.formField}>
                       <label style={styles.formLabel}>Years of Experience</label>
@@ -288,6 +323,83 @@ const UserManagement = () => {
                     <input style={styles.formInput}
                       value={modalData.doctorDetails?.department || ''}
                       onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, department: e.target.value } }))} />
+                  </div>
+                  <div style={styles.formRow}>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Consultation Fee (LKR) *</label>
+                      <input style={styles.formInput} type="number" required
+                        value={modalData.doctorDetails?.consultationFee || ''}
+                        onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, consultationFee: e.target.value } }))} />
+                    </div>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Status</label>
+                      <select style={styles.formInput}
+                        value={modalData.doctorDetails?.status || 'active'}
+                        onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, status: e.target.value } }))}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="on_leave">On Leave</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={styles.formField}>
+                    <label style={styles.formLabel}>Bio</label>
+                    <textarea style={{ ...styles.formInput, minHeight: '100px' }}
+                      value={modalData.doctorDetails?.bio || ''}
+                      onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, bio: e.target.value } }))}
+                      placeholder="Short professional bio" />
+                  </div>
+                  <div style={styles.formField}>
+                    <label style={styles.formLabel}>Available Days</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((day) => {
+                        const active = modalData.doctorDetails?.availableDays?.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              const days = modalData.doctorDetails?.availableDays || [];
+                              setModalData(p => ({
+                                ...p,
+                                doctorDetails: {
+                                  ...p.doctorDetails,
+                                  availableDays: days.includes(day)
+                                    ? days.filter((d) => d !== day)
+                                    : [...days, day],
+                                },
+                              }));
+                            }}
+                            style={{
+                              padding: '0.45rem 0.8rem',
+                              borderRadius: '999px',
+                              border: '1px solid',
+                              borderColor: active ? '#1b6ca8' : '#e9ecef',
+                              background: active ? '#e8f0fe' : '#fff',
+                              color: active ? '#1b6ca8' : '#495057',
+                              cursor: 'pointer',
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            {day.slice(0, 3)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div style={{ ...styles.formRow, gap: '1rem' }}>
+                    <div style={{ ...styles.formField, flex: 1 }}>
+                      <label style={styles.formLabel}>Start Time</label>
+                      <input style={styles.formInput} type="time"
+                        value={modalData.doctorDetails?.consultationHours?.start || '09:00'}
+                        onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, consultationHours: { ...p.doctorDetails?.consultationHours, start: e.target.value } } }))} />
+                    </div>
+                    <div style={{ ...styles.formField, flex: 1 }}>
+                      <label style={styles.formLabel}>End Time</label>
+                      <input style={styles.formInput} type="time"
+                        value={modalData.doctorDetails?.consultationHours?.end || '17:00'}
+                        onChange={e => setModalData(p => ({ ...p, doctorDetails: { ...p.doctorDetails, consultationHours: { ...p.doctorDetails?.consultationHours, end: e.target.value } } }))} />
+                    </div>
                   </div>
                 </>
               )}
