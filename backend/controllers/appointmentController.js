@@ -133,3 +133,42 @@ exports.deleteAppointment = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ─── ADD this function to appointmentController.js ───────────────────────────
+//
+// Returns the list of already-booked HH:mm times for a given doctor + date.
+// No authentication required — patients need this before they even log in to
+// browse availability, and it exposes no private data (just time strings).
+//
+// GET /api/appointments/booked-slots?doctorId=<id>&date=<YYYY-MM-DD>
+
+exports.getBookedSlots = async (req, res) => {
+  try {
+    const { doctorId, date } = req.query;
+
+    if (!doctorId || !date) {
+      return res.status(400).json({ success: false, message: 'doctorId and date query params are required.' });
+    }
+
+    const parsedDate = new Date(date + 'T00:00:00');
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid date format. Use YYYY-MM-DD.' });
+    }
+
+    // End of the same day
+    const nextDay = new Date(parsedDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const appointments = await Appointment.find({
+      doctor: doctorId,
+      appointmentDate: { $gte: parsedDate, $lt: nextDay },
+      status: { $nin: ['cancelled'] }, // cancelled slots are free again
+    }).select('appointmentTime -_id');
+
+    const bookedTimes = appointments.map((a) => a.appointmentTime);
+
+    res.status(200).json({ success: true, bookedTimes });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
