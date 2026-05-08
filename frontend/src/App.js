@@ -16,6 +16,7 @@ import DoctorManagement from './pages/Staff/DoctorManagement';
 import AddDoctor from './pages/Staff/Adddoctor';
 import DoctorsPage from './pages/User/Doctorspage';
 import AppointmentPage from './pages/User/AppointmentPage';
+import AIChatbot from './pages/User/AIChatBot';
 
 function App() {
   return (
@@ -86,6 +87,7 @@ function App() {
   } />
   <Route path="/doctormanagement" element={<DoctorManagement/>} />
   <Route path="/adddoctor" element={<AddDoctor/>} />
+  <Route path="/ai" element={<AIChatbot />} />
 
   {/* Redirects */}
   <Route path="*" element={<Navigate to="/login" replace />} />

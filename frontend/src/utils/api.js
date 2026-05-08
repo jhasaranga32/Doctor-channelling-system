@@ -56,4 +56,9 @@ export const appointmentAPI = {
   delete: (id) => API.delete(`/appointments/${id}`),
 };
 
+export const aiAPI = {
+  symptomCheck: (history, systemPrompt) =>
+    API.post('/ai/symptom-check', { history, systemPrompt }),
+};
+
 export default API;
