@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { appointmentAPI } from '../../utils/api';
+import { appointmentAPI, paymentAPI } from '../../utils/api';
 
 const API_BASE = '/api';
 
@@ -203,14 +203,19 @@ const AppointmentPage = () => {
       if (editId) {
         await appointmentAPI.update(editId, payload);
         toast.success('Appointment updated successfully.');
+        resetForm();
+        await loadAppointments();
+        await refreshBookedSlots(); // immediately lock the slot for this patient too
       } else {
-        await appointmentAPI.create(payload);
-        toast.success('Appointment booked successfully.');
+        // Redirect to Stripe checkout for new bookings
+        const res = await paymentAPI.createCheckoutSession(payload);
+        if (res.data?.url) {
+          window.location.href = res.data.url;
+          return; // Stop execution here, browser will redirect
+        } else {
+          toast.error('Unable to initiate payment.');
+        }
       }
-
-      resetForm();
-      await loadAppointments();
-      await refreshBookedSlots(); // immediately lock the slot for this patient too
     } catch (error) {
       toast.error(error.response?.data?.message || 'Unable to save appointment.');
     } finally {

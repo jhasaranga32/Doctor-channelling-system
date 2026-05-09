@@ -61,4 +61,9 @@ export const aiAPI = {
     API.post('/ai/symptom-check', { history, systemPrompt }),
 };
 
+export const paymentAPI = {
+  createCheckoutSession: (data) => API.post('/payments/create-checkout-session', data),
+  verifySession: (data) => API.post('/payments/verify-session', data),
+};
+
 export default API;
