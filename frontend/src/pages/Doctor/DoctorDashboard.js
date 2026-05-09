@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { authAPI } from '../../utils/api';
+import { authAPI, appointmentAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
 
 const DoctorDashboard = () => {
@@ -13,6 +13,26 @@ const DoctorDashboard = () => {
   });
   const [pwData, setPwData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [saving, setSaving] = useState(false);
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppts, setLoadingAppts] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'appointments') {
+      fetchAppointments();
+    }
+  }, [activeTab]);
+
+  const fetchAppointments = async () => {
+    setLoadingAppts(true);
+    try {
+      const res = await appointmentAPI.getAll();
+      setAppointments(res.data.appointments || []);
+    } catch (err) {
+      toast.error('Failed to load appointments');
+    } finally {
+      setLoadingAppts(false);
+    }
+  };
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -42,6 +62,7 @@ const DoctorDashboard = () => {
 
   const TABS = [
     { id: 'overview', label: '🏠 Overview' },
+    { id: 'appointments', label: '📅 Appointments' },
     { id: 'profile', label: '👤 My Profile' },
     { id: 'security', label: '🔒 Security' },
   ];
@@ -97,6 +118,53 @@ const DoctorDashboard = () => {
                 <div style={styles.infoItem}><span style={styles.iLabel}>Department</span><span style={styles.iValue}>{user?.doctorDetails?.department || '—'}</span></div>
                 <div style={styles.infoItem}><span style={styles.iLabel}>Status</span><span style={{ ...styles.badge, background: '#e8f5e9', color: '#2e7d32' }}>Active</span></div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'appointments' && (
+          <div>
+            <h1 style={styles.title}>My Appointments</h1>
+            <p style={styles.subtitle}>Manage your upcoming patient appointments.</p>
+            <div style={styles.formCard}>
+              {loadingAppts ? (
+                <div style={{ textAlign: 'center', color: '#6c757d' }}>Loading appointments...</div>
+              ) : appointments.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#6c757d', padding: '2rem' }}>You have no appointments.</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #f0f0f0' }}>
+                        <th style={styles.th}>Patient Name</th>
+                        <th style={styles.th}>Date</th>
+                        <th style={styles.th}>Time</th>
+                        <th style={styles.th}>Status</th>
+                        <th style={styles.th}>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appointments.map((appt) => (
+                        <tr key={appt._id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={styles.td}>{appt.patient?.firstName} {appt.patient?.lastName}</td>
+                          <td style={styles.td}>{new Date(appt.appointmentDate).toLocaleDateString()}</td>
+                          <td style={styles.td}>{appt.appointmentTime}</td>
+                          <td style={styles.td}>
+                            <span style={{ 
+                              ...styles.badge, 
+                              background: appt.status === 'confirmed' ? '#e8f5e9' : appt.status === 'cancelled' ? '#ffebee' : '#fff3e0',
+                              color: appt.status === 'confirmed' ? '#2e7d32' : appt.status === 'cancelled' ? '#c62828' : '#ef6c00'
+                            }}>
+                              {appt.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td style={styles.td}>{appt.reason || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -232,6 +300,8 @@ const styles = {
   cancelBtn: { padding: '0.7rem 1.5rem', border: '2px solid #e9ecef', borderRadius: '8px', background: '#fff', cursor: 'pointer', fontWeight: '600', color: '#6c757d' },
   saveBtn: { padding: '0.7rem 1.75rem', background: 'linear-gradient(135deg, #1565c0, #0d7377)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' },
   badge: { padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600', display: 'inline-block' },
+  th: { padding: '1rem', color: '#495057', fontWeight: '600', fontSize: '0.9rem' },
+  td: { padding: '1rem', color: '#1a1a2e', fontSize: '0.9rem' },
 };
 
 export default DoctorDashboard;

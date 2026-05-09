@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 const TABS = [
   { id: "overview",  label: "Overview",  icon: "📊", route: "/staff/dashboard" },
   { id: "doctors",   label: "Doctors", icon: "👤", route: "/doctormanagement" },
-
+  { id: "appointments", label: "Appointments", icon: "📅", route: "/staff/appointments" },
 ];
 
 export default function StaffSidebar({ user, activeTab, setActiveTab, logout }) {

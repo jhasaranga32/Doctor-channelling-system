@@ -63,7 +63,8 @@ const DoctorManagement = () => {
       department:      doctor.doctorDetails?.department || '',
       qualification:   doctor.doctorDetails?.qualifications?.join(', ') || '',
       experience:      doctor.doctorDetails?.yearsOfExperience || '',
-      isActive:        doctor.isActive       || true,
+      consultationFee: doctor.doctorDetails?.consultationFee || '',
+      isActive:        doctor.isActive       !== undefined ? doctor.isActive : true,
       bio:             doctor.doctorDetails?.bio || '',
     });
   };
@@ -92,6 +93,7 @@ const DoctorManagement = () => {
         licenseNumber:  payload.licenseNumber,
         department:     payload.department,
         yearsOfExperience: Number(payload.experience) || 0,
+        consultationFee: Number(payload.consultationFee) || 0,
         bio: payload.bio,
       };
       // Remove fields that are not in user schema
@@ -99,6 +101,7 @@ const DoctorManagement = () => {
       delete payload.licenseNumber;
       delete payload.department;
       delete payload.experience;
+      delete payload.consultationFee;
       delete payload.bio;
 
       const res = await userAPI.update(editDoctor._id, payload);
@@ -323,24 +326,31 @@ const DoctorManagement = () => {
               <form onSubmit={handleEditSave}>
                 <div style={styles.formRow}>
                   <div style={styles.formField}>
-                    <label style={styles.label}>Doctor Name</label>
-                    <div style={{ ...styles.input, background: '#f8fafc', color: '#475569', minHeight: 44, display: 'flex', alignItems: 'center', padding: '10px 14px', borderRadius: 12, border: '1.5px solid #e2e8f0' }}>
-                      Dr. {editDoctor.firstName} {editDoctor.lastName}
-                    </div>
+                    <label style={styles.label}>First Name</label>
+                    <input className="edit-input" style={styles.input} value={editForm.firstName}
+                      onChange={e => setEditForm(f => ({ ...f, firstName: e.target.value }))} placeholder="First Name" />
                   </div>
                   <div style={styles.formField}>
-                    <label style={styles.label}>Email</label>
-                    <input className="edit-input" style={{ ...styles.input, background: '#f8fafc', cursor: 'not-allowed' }} type="email"
-                      value={editDoctor.email} readOnly placeholder="Email address" />
+                    <label style={styles.label}>Last Name</label>
+                    <input className="edit-input" style={styles.input} value={editForm.lastName}
+                      onChange={e => setEditForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Last Name" />
                   </div>
                 </div>
 
                 <div style={styles.formRow}>
                   <div style={styles.formField}>
+                    <label style={styles.label}>Email</label>
+                    <input className="edit-input" style={{ ...styles.input, background: '#f8fafc', cursor: 'not-allowed' }} type="email"
+                      value={editDoctor.email} readOnly title="Email cannot be changed" />
+                  </div>
+                  <div style={styles.formField}>
                     <label style={styles.label}>Phone</label>
                     <input className="edit-input" style={styles.input} value={editForm.phone}
                       onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1-555-0100" />
                   </div>
+                </div>
+
+                <div style={styles.formRow}>
                   <div style={styles.formField}>
                     <label style={styles.label}>Specialization</label>
                     <select className="edit-input" style={{ ...styles.input, appearance:'none', cursor:'pointer' }} value={editForm.specialization}
@@ -370,12 +380,18 @@ const DoctorManagement = () => {
                     <input className="edit-input" style={styles.input} value={editForm.qualification}
                       onChange={e => setEditForm(f => ({ ...f, qualification: e.target.value }))} placeholder="e.g. MBBS, MD" />
                   </div>
-                </div>
-                <div style={styles.formRow}>
                   <div style={styles.formField}>
                     <label style={styles.label}>Experience (years)</label>
                     <input className="edit-input" style={styles.input} type="number" min="0" max="60" value={editForm.experience}
                       onChange={e => setEditForm(f => ({ ...f, experience: e.target.value }))} placeholder="e.g. 10" />
+                  </div>
+                </div>
+                
+                <div style={styles.formRow}>
+                  <div style={styles.formField}>
+                    <label style={styles.label}>Consultation Fee (LKR)</label>
+                    <input className="edit-input" style={styles.input} type="number" min="0" value={editForm.consultationFee}
+                      onChange={e => setEditForm(f => ({ ...f, consultationFee: e.target.value }))} placeholder="e.g. 1500" />
                   </div>
                 </div>
 
