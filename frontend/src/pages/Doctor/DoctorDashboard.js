@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { authAPI, appointmentAPI } from '../../utils/api';
+import { authAPI, appointmentAPI, leaveAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
 
 const DoctorDashboard = () => {
@@ -15,11 +15,14 @@ const DoctorDashboard = () => {
   const [saving, setSaving] = useState(false);
   const [appointments, setAppointments] = useState([]);
   const [loadingAppts, setLoadingAppts] = useState(false);
+  const [leaves, setLeaves] = useState([]);
+  const [loadingLeaves, setLoadingLeaves] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({ startDate: '', endDate: '', reason: '' });
+  const [submittingLeave, setSubmittingLeave] = useState(false);
 
   useEffect(() => {
-    if (activeTab === 'appointments') {
-      fetchAppointments();
-    }
+    if (activeTab === 'appointments') fetchAppointments();
+    if (activeTab === 'leaves') fetchLeaves();
   }, [activeTab]);
 
   const fetchAppointments = async () => {
@@ -31,6 +34,33 @@ const DoctorDashboard = () => {
       toast.error('Failed to load appointments');
     } finally {
       setLoadingAppts(false);
+    }
+  };
+
+  const fetchLeaves = async () => {
+    setLoadingLeaves(true);
+    try {
+      const res = await leaveAPI.getMyRequests();
+      setLeaves(res.data.leaves || []);
+    } catch (err) {
+      toast.error('Failed to load leave requests');
+    } finally {
+      setLoadingLeaves(false);
+    }
+  };
+
+  const handleLeaveSubmit = async (e) => {
+    e.preventDefault();
+    setSubmittingLeave(true);
+    try {
+      await leaveAPI.createRequest(leaveForm);
+      toast.success('Leave request submitted!');
+      setLeaveForm({ startDate: '', endDate: '', reason: '' });
+      fetchLeaves();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit leave request');
+    } finally {
+      setSubmittingLeave(false);
     }
   };
 
@@ -63,6 +93,7 @@ const DoctorDashboard = () => {
   const TABS = [
     { id: 'overview', label: '🏠 Overview' },
     { id: 'appointments', label: '📅 Appointments' },
+    { id: 'leaves', label: '🏖️ Leave Requests' },
     { id: 'profile', label: '👤 My Profile' },
     { id: 'security', label: '🔒 Security' },
   ];
@@ -159,6 +190,85 @@ const DoctorDashboard = () => {
                             </span>
                           </td>
                           <td style={styles.td}>{appt.reason || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'leaves' && (
+          <div>
+            <h1 style={styles.title}>Leave Requests</h1>
+            <p style={styles.subtitle}>Apply for leave and view your request history.</p>
+            
+            <div style={{ ...styles.formCard, marginBottom: '2rem' }}>
+              <h3 style={styles.sectionTitle}>Apply for Leave</h3>
+              <form onSubmit={handleLeaveSubmit}>
+                <div style={styles.formRow}>
+                  <div style={styles.fField}>
+                    <label style={styles.label}>Start Date</label>
+                    <input style={styles.input} type="date" required 
+                           min={new Date().toISOString().split('T')[0]}
+                           value={leaveForm.startDate} 
+                           onChange={e => setLeaveForm(f => ({ ...f, startDate: e.target.value }))} />
+                  </div>
+                  <div style={styles.fField}>
+                    <label style={styles.label}>End Date</label>
+                    <input style={styles.input} type="date" required 
+                           min={leaveForm.startDate || new Date().toISOString().split('T')[0]}
+                           value={leaveForm.endDate} 
+                           onChange={e => setLeaveForm(f => ({ ...f, endDate: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={styles.fField}>
+                  <label style={styles.label}>Reason</label>
+                  <textarea style={{ ...styles.input, minHeight: '80px', resize: 'vertical' }} required
+                            value={leaveForm.reason} 
+                            onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))} 
+                            placeholder="Please provide a brief reason for your leave" />
+                </div>
+                <button type="submit" style={styles.saveBtn} disabled={submittingLeave}>
+                  {submittingLeave ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </form>
+            </div>
+
+            <div style={styles.formCard}>
+              <h3 style={styles.sectionTitle}>My Request History</h3>
+              {loadingLeaves ? (
+                <div style={{ textAlign: 'center', color: '#6c757d' }}>Loading...</div>
+              ) : leaves.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#6c757d', padding: '2rem' }}>No leave requests found.</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #f0f0f0' }}>
+                        <th style={styles.th}>Date Range</th>
+                        <th style={styles.th}>Reason</th>
+                        <th style={styles.th}>Status</th>
+                        <th style={styles.th}>Staff Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaves.map((l) => (
+                        <tr key={l._id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={styles.td}>{l.startDate} to {l.endDate}</td>
+                          <td style={styles.td}>{l.reason}</td>
+                          <td style={styles.td}>
+                            <span style={{ 
+                              ...styles.badge, 
+                              background: l.status === 'approved' ? '#e8f5e9' : l.status === 'rejected' ? '#ffebee' : '#fff3e0',
+                              color: l.status === 'approved' ? '#2e7d32' : l.status === 'rejected' ? '#c62828' : '#ef6c00'
+                            }}>
+                              {l.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td style={styles.td}>{l.staffNotes || '—'}</td>
                         </tr>
                       ))}
                     </tbody>

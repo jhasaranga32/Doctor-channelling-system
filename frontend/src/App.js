@@ -11,6 +11,7 @@ import PatientDashboard from './pages/User/PatientDashboard';
 import DoctorDashboard from './pages/Doctor/DoctorDashboard';
 import StaffDashboard from './pages/Staff/StaffDashboard';
 import StaffAppointments from './pages/Staff/StaffAppointments';
+import StaffLeaves from './pages/Staff/StaffLeaves';
 import AdminDashboard from './pages/AdminDashboard';
 import Homepage from './pages/Homepage';
 import DoctorManagement from './pages/Staff/DoctorManagement';
@@ -68,6 +69,12 @@ function App() {
   <Route path="/staff/appointments" element={
     <ProtectedRoute allowedRoles={['staff']}>
       <StaffAppointments />
+    </ProtectedRoute>
+  } />
+
+  <Route path="/staff/leaves" element={
+    <ProtectedRoute allowedRoles={['staff']}>
+      <StaffLeaves />
     </ProtectedRoute>
   } />
 

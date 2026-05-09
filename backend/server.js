@@ -35,6 +35,7 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/doctors', require('./routes/doctorRoutes'));
 app.use('/api/appointments', require('./routes/appointmentRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
+app.use('/api/leaves', require('./routes/leaveRoutes'));
 app.use("/api/ai", aiRoute);
 
 // 404 handler

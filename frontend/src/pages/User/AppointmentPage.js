@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { appointmentAPI, paymentAPI } from '../../utils/api';
 
 const API_BASE = '/api';
@@ -72,6 +74,7 @@ const AppointmentPage = () => {
           specialization: doc.doctorDetails?.specialization || 'General Practice',
           availableDays: (doc.doctorDetails?.availableSlots || []).map((s) => s.day).filter(Boolean),
           availableSlots: doc.doctorDetails?.availableSlots || [],
+          blockedDates: doc.doctorDetails?.blockedDates || [],
           consultationHours: doc.doctorDetails?.availableSlots?.[0]
             ? {
                 start: doc.doctorDetails.availableSlots[0].startTime,
@@ -134,9 +137,16 @@ const AppointmentPage = () => {
   // ── Derived state ─────────────────────────────────────────────────────────
 
   const selectedDoctor = useMemo(() => {
-    if (doctor) return doctor;
-    return doctors.find((d) => d._id === formData.doctorId) || null;
+    if (doctors.length > 0 && formData.doctorId) {
+      return doctors.find((d) => d._id === formData.doctorId) || doctor;
+    }
+    return doctor || null;
   }, [doctor, doctors, formData.doctorId]);
+
+  const isBlockedDate = useMemo(() => {
+    if (!selectedDoctor || !formData.appointmentDate) return false;
+    return selectedDoctor.blockedDates?.includes(formData.appointmentDate) || false;
+  }, [selectedDoctor, formData.appointmentDate]);
 
   /** Slot range for the chosen day-of-week */
   const slotRange = useMemo(() => {
@@ -148,6 +158,10 @@ const AppointmentPage = () => {
       (s) => s.day?.toLowerCase() === dayName.toLowerCase()
     );
     if (match) return { start: match.startTime, end: match.endTime };
+    
+    if (selectedDoctor.availableSlots && selectedDoctor.availableSlots.length > 0) {
+      return null;
+    }
     return selectedDoctor.consultationHours || null;
   }, [selectedDoctor, formData.appointmentDate]);
 
@@ -179,6 +193,7 @@ const AppointmentPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isBlockedDate) return toast.error('Doctor is on leave on this date. Please select another date.');
     if (!formData.doctorId) return toast.error('Please select a doctor.');
     if (!formData.appointmentDate) return toast.error('Select an appointment date.');
     if (!formData.appointmentTime) return toast.error('Select an appointment time slot.');
@@ -332,16 +347,49 @@ const AppointmentPage = () => {
               {/* Date */}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700">Date</label>
-                <input
-                  type="date"
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
-                  value={formData.appointmentDate}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, appointmentDate: e.target.value, appointmentTime: '' }))
-                  }
-                  required
-                />
+                <div className="w-full relative">
+                  <DatePicker
+                    selected={formData.appointmentDate ? new Date(formData.appointmentDate + 'T00:00:00') : null}
+                    onChange={(date) => {
+                      if (date) {
+                        const tzOffset = date.getTimezoneOffset() * 60000;
+                        const localISOTime = new Date(date.getTime() - tzOffset).toISOString().split('T')[0];
+                        setFormData((prev) => ({ ...prev, appointmentDate: localISOTime, appointmentTime: '' }));
+                      } else {
+                        setFormData((prev) => ({ ...prev, appointmentDate: '', appointmentTime: '' }));
+                      }
+                    }}
+                    minDate={new Date()}
+                    filterDate={(date) => {
+                      if (!selectedDoctor) return true;
+                      
+                      // 1. Check blocked dates (leaves)
+                      if (selectedDoctor.blockedDates) {
+                        const y = date.getFullYear();
+                        const m = String(date.getMonth() + 1).padStart(2, '0');
+                        const d = String(date.getDate()).padStart(2, '0');
+                        if (selectedDoctor.blockedDates.includes(`${y}-${m}-${d}`)) {
+                          return false;
+                        }
+                      }
+                      
+                      // 2. Check working days (available days)
+                      if (selectedDoctor.availableDays && selectedDoctor.availableDays.length > 0) {
+                        const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+                        if (!selectedDoctor.availableDays.includes(dayName)) {
+                          return false;
+                        }
+                      }
+                      
+                      return true;
+                    }}
+                    className="w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                    wrapperClassName="w-full"
+                    placeholderText="Select a date"
+                    dateFormat="yyyy-MM-dd"
+                    required
+                  />
+                </div>
               </div>
 
               {/* Time slot grid */}
@@ -358,6 +406,10 @@ const AppointmentPage = () => {
                 {!formData.doctorId || !formData.appointmentDate ? (
                   <div className="rounded-3xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
                     Select a doctor and date to see available slots.
+                  </div>
+                ) : isBlockedDate ? (
+                  <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-600 font-medium">
+                    Dr. {selectedDoctor.name} is on leave and unavailable on this date. Please select another date.
                   </div>
                 ) : slotsLoading ? (
                   <div className="rounded-3xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
@@ -442,7 +494,7 @@ const AppointmentPage = () => {
                 )}
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || isBlockedDate}
                   className="inline-flex items-center justify-center rounded-3xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? 'Saving...' : editId ? 'Update Appointment' : 'Book Appointment'}

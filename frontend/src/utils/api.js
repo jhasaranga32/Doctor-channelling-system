@@ -66,4 +66,11 @@ export const paymentAPI = {
   verifySession: (data) => API.post('/payments/verify-session', data),
 };
 
+export const leaveAPI = {
+  createRequest: (data) => API.post('/leaves', data),
+  getMyRequests: () => API.get('/leaves/me'),
+  getAllRequests: () => API.get('/leaves'),
+  updateStatus: (id, statusData) => API.put(`/leaves/${id}/status`, statusData),
+};
+
 export default API;

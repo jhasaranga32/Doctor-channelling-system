@@ -95,6 +95,7 @@ const userSchema = new mongoose.Schema(
       bio: { type: String, maxlength: 1000 },
       rating: { type: Number, default: 0, min: 0, max: 5 },
       totalReviews: { type: Number, default: 0 },
+      blockedDates: [String],
     },
 
     // === STAFF SPECIFIC ===
