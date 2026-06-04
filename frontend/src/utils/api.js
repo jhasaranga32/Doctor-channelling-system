@@ -5,6 +5,12 @@ const API = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+const OLLAMA_BASE = process.env.REACT_APP_AI_SERVER || 'http://localhost:8000';
+const OLLAMA_API = axios.create({
+  baseURL: OLLAMA_BASE,
+  headers: { 'Content-Type': 'application/json' },
+});
+
 // Attach JWT token to every request
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -59,6 +65,8 @@ export const appointmentAPI = {
 export const aiAPI = {
   symptomCheck: (history, systemPrompt) =>
     API.post('/ai/symptom-check', { history, systemPrompt }),
+  ollamaChat: (messages) =>
+    OLLAMA_API.post('/chat', { messages }),
 };
 
 export const paymentAPI = {

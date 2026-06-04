@@ -41,18 +41,41 @@ export default function AIChatBot() {
     setMessages(prev => [...prev, { role: "user", text: userText }]);
 
     try {
-      // ✅ calls backend — not Gemini directly
-      const res = await aiAPI.symptomCheck(newHistory, SYSTEM_PROMPT);
-      const reply = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || "Please try again.";
+      let reply = null;
+      let recommended = null;
+      let cleanReply = null;
 
-      const match = reply.match(/\[RECOMMEND:([^\]]+)\]/);
-      const cleanReply = reply.replace(/\[RECOMMEND:[^\]]+\]/g, "").trim();
-      const recommended = match
-        ? DOCTOR_CATEGORIES.find(d => d.name.toLowerCase() === match[1].toLowerCase().trim())
-        : null;
+      try {
+        const formattedHistory = newHistory.map(msg => ({
+          role: msg.role === "model" ? "assistant" : msg.role,
+          content: msg.parts?.[0]?.text || ""
+        }));
+        const res = await aiAPI.ollamaChat(formattedHistory);
+        reply = res.data?.message;
+        const recommendation = res.data?.recommendation;
+        if (recommendation?.specialty_name) {
+          recommended = DOCTOR_CATEGORIES.find(
+            (d) => d.name.toLowerCase() === recommendation.specialty_name.toLowerCase().trim()
+          );
+        }
+      } catch (directError) {
+        console.warn('Ollama chat unavailable, falling back to backend AI route.', directError);
+      }
 
-      setHistory([...newHistory, { role: "model", parts: [{ text: reply }] }]);
-      setMessages(prev => [...prev, { role: "ai", text: cleanReply, recommended }]);
+      if (!reply) {
+        const res = await aiAPI.symptomCheck(newHistory, SYSTEM_PROMPT);
+        reply = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || "Please try again.";
+        const match = reply.match(/\[RECOMMEND:([^\]]+)\]/);
+        cleanReply = reply.replace(/\[RECOMMEND:[^\]]+\]/g, "").trim();
+        recommended = match
+          ? DOCTOR_CATEGORIES.find(d => d.name.toLowerCase() === match[1].toLowerCase().trim())
+          : null;
+        reply = cleanReply;
+      }
+
+      const finalReply = cleanReply || reply;
+      setHistory([...newHistory, { role: "model", parts: [{ text: finalReply }] }]);
+      setMessages(prev => [...prev, { role: "ai", text: finalReply, recommended }]);
     } catch (err) {
       console.error(err);
       setMessages(prev => [...prev, {

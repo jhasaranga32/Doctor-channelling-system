@@ -4,7 +4,7 @@
 // Connects to: GET /api/doctors  &  GET /api/doctors/specializations
 // Updated to use navigate for appointment booking
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const API_BASE = "/api";
@@ -145,6 +145,11 @@ export default function DoctorsPage() {
     { role: "assistant", text: "Tell me your symptoms and I will recommend the right doctor category." },
   ]);
   const [recommendedSpecialty, setRecommendedSpecialty] = useState(null);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [aiMessages, aiLoading]);
 
   useEffect(() => {
     const specialty = searchParams.get('specialty');
@@ -223,9 +228,20 @@ export default function DoctorsPage() {
     if (!aiInput.trim() || aiLoading) return;
 
     const userText = aiInput.trim();
-    const newHistory = [
-      ...aiMessages.map((msg) => ({ role: msg.role, content: msg.text })),
-      { role: 'user', content: userText },
+    const formattedMessages = [
+      ...aiMessages.map((msg) => ({
+        role: msg.role === 'assistant' ? 'assistant' : 'user',
+        content: msg.text || msg.content || ''
+      })),
+      { role: 'user', content: userText }
+    ];
+
+    const geminiHistory = [
+      ...aiMessages.map((msg) => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.text || msg.content || '' }]
+      })),
+      { role: 'user', parts: [{ text: userText }] }
     ];
 
     setAIInput("");
@@ -233,16 +249,42 @@ export default function DoctorsPage() {
     setAIMessages((prev) => [...prev, { role: 'user', text: userText }]);
 
     try {
-      const res = await fetch(`${API_BASE}/ai/symptom-check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: newHistory, systemPrompt: SYSTEM_PROMPT }),
-      });
-      const data = await res.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not get a recommendation right now.';
-      const recommendation = parseRecommendation(reply);
-      const specialization = readSpecialization(recommendation);
+      let reply = null;
+      let recommendation = null;
+
+      try {
+        const res = await fetch('http://localhost:8000/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: formattedMessages }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          reply = data.message;
+          recommendation = data.recommendation;
+        }
+      } catch (ollamaError) {
+        console.warn('Ollama chat unavailable, falling back to backend AI route.', ollamaError);
+      }
+
+      if (!reply) {
+        const res = await fetch(`${API_BASE}/ai/symptom-check`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ history: geminiHistory, systemPrompt: SYSTEM_PROMPT }),
+        });
+        const data = await res.json();
+        reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+      }
+
+      if (!reply) {
+        throw new Error('No response from AI service');
+      }
+
       setAIMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
+
+      const parsedRecommendation = recommendation || parseRecommendation(reply);
+      const specialization = readSpecialization(parsedRecommendation);
       if (specialization) {
         setRecommendedSpecialty(specialization);
         setActiveSpec(specialization);
@@ -313,55 +355,182 @@ export default function DoctorsPage() {
 
       {/* ── AI Symptom Recommender ── */}
       <div className="mx-auto max-w-[1200px] px-6 py-12 md:px-6">
-        <div className="grid gap-6 rounded-[28px] bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,.06)] md:grid-cols-[1.5fr_1fr]">
-          <div>
-            <div className="mb-3 text-sm font-semibold uppercase tracking-[.24em] text-[#0c1220]/60">
-              Need help choosing a specialist?
+        <div className="grid gap-8 rounded-[32px] bg-white p-8 shadow-[0_24px_60px_rgba(15,23,42,.04)] border border-gray-100 md:grid-cols-[1.2fr_1.8fr]">
+          
+          {/* Info Column */}
+          <div className="flex flex-col justify-between pr-0 md:pr-4">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-indigo-600">
+                🤖 MedAssist AI Assistant
+              </div>
+              <h2 className="mb-4 text-3xl font-extrabold text-[#0c1220] leading-tight" style={{ fontFamily: "'Fraunces', serif" }}>
+                Not sure which specialist to choose?
+              </h2>
+              <p className="mb-6 text-[14px] leading-relaxed text-gray-500">
+                Describe your symptoms in detail (e.g. pain severity, duration, and body location) and our AI assistant will analyze them to recommend the most suitable doctor specialty.
+              </p>
+              
+              <div className="space-y-4 mb-6">
+                {[
+                  { title: "Smart Triage", desc: "Instantly maps symptoms to specialties" },
+                  { title: "Empathetic Follow-ups", desc: "Asks context-aware questions to clarify symptoms" },
+                  { title: "Direct Filter", desc: "Filters matching doctors on this page instantly" }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex gap-3 items-start">
+                    <div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] text-indigo-600 shrink-0 font-bold mt-0.5">
+                      ✓
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-[#0c1220]">{item.title}</h4>
+                      <p className="text-[11px] text-gray-400">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <h2 className="mb-4 text-3xl font-bold text-[#0c1220]" style={{ fontFamily: "'Fraunces', serif" }}>
-              Tell us your symptoms and get the right doctor category.
-            </h2>
-            <p className="mb-6 text-sm leading-relaxed text-gray-500">
-              Use the symptom assistant to find the best specialty, then view the filtered doctors below.
-            </p>
-            <textarea
-              className="w-full resize-none rounded-3xl border border-[#e8e8e4] bg-[#fafaf8] p-4 text-sm text-[#0c1220] outline-none focus:border-[#0c1220]"
-              rows={5}
-              placeholder="E.g. I have chest pain and shortness of breath, especially when I climb stairs..."
-              value={aiInput}
-              onChange={(e) => setAIInput(e.target.value)}
-            />
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                className="rounded-full bg-[#0c1220] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b]"
-                onClick={handleAISubmit}
-                disabled={aiLoading}
-              >
-                {aiLoading ? 'Analyzing...' : 'Recommend a specialty'}
-              </button>
-              {recommendedSpecialty && (
-                <span className="rounded-full border border-[#0c1220] bg-[#e2e8f0] px-4 py-2 text-sm font-semibold text-[#0c1220]">
-                  Showing {recommendedSpecialty} doctors
-                </span>
-              )}
+            
+            <div className="rounded-2xl bg-amber-50/50 border border-amber-100 p-4 text-[11px] text-amber-700 leading-relaxed">
+              ⚠️ <strong>Disclaimer:</strong> MedAssist AI is for guidance purposes only and does not replace professional diagnosis. For severe or life-threatening symptoms, please seek emergency care immediately.
             </div>
           </div>
 
-          <div className="rounded-[24px] bg-[#0f172a] p-6 text-white">
-            <div className="mb-4 text-sm font-semibold uppercase tracking-[.24em] text-white/60">
-              AI Conversation
-            </div>
-            <div className="space-y-4 overflow-hidden rounded-[24px] border border-white/10 bg-[#111827] p-4">
-              {aiMessages.map((msg, index) => (
-                <div key={index} className={`rounded-3xl p-4 ${msg.role === 'assistant' ? 'bg-white/10' : 'bg-white/10/60'} ${msg.role === 'assistant' ? 'text-white' : 'text-[#0c1220]'}`}>
-                  <div className="mb-2 text-xs uppercase tracking-[.3em] text-white/50">
-                    {msg.role === 'assistant' ? 'AI' : 'You'}
+          {/* Unified Chat Column */}
+          <div className="flex flex-col rounded-3xl bg-gray-50 border border-gray-100 p-5 shadow-inner">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-200/60 pb-3.5 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="relative">
+                  <div className="w-9 h-9 rounded-xl bg-[#0c1220] flex items-center justify-center text-base text-white shadow-md shadow-indigo-200">
+                    🤖
                   </div>
-                  <div className="whitespace-pre-line text-sm leading-6 text-white/90">{msg.text}</div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white animate-pulse"></span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#0c1220] text-sm leading-none mb-1">MedAssist Chatbot</h3>
+                  <p className="text-[10px] text-gray-400 font-medium">Ready to analyze symptoms</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setAIMessages([{ role: "assistant", text: "Tell me your symptoms and I will recommend the right doctor category." }]);
+                  setRecommendedSpecialty(null);
+                }}
+                className="text-[11px] font-bold text-gray-400 hover:text-[#0c1220] transition duration-150 flex items-center gap-1 bg-white hover:bg-gray-100 px-3 py-1.5 rounded-xl border border-gray-200"
+              >
+                🔄 Reset Chat
+              </button>
+            </div>
+
+            {/* Message Area */}
+            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1 mb-4 flex flex-col scroll-smooth">
+              {aiMessages.map((msg, index) => (
+                <div 
+                  key={index} 
+                  className={`flex gap-3 max-w-[85%] ${msg.role === 'assistant' ? 'self-start' : 'self-end flex-row-reverse'}`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm shrink-0 shadow-sm border border-indigo-200/20">
+                      🤖
+                    </div>
+                  )}
+                  <div>
+                    <div 
+                      className={`p-3.5 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
+                        msg.role === 'assistant' 
+                          ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100' 
+                          : 'bg-indigo-600 text-white rounded-tr-none'
+                      }`}
+                    >
+                      <div className="whitespace-pre-line">{msg.text || msg.content}</div>
+                    </div>
+                  </div>
                 </div>
               ))}
+              {aiLoading && (
+                <div className="flex gap-3 max-w-[85%] self-start">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm shrink-0">
+                    🤖
+                  </div>
+                  <div className="bg-white border border-gray-100 p-3.5 rounded-2xl rounded-tl-none flex items-center gap-1 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Recommendation Alert */}
+            {recommendedSpecialty && (
+              <div className="mb-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-3.5 flex items-center justify-between gap-4 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-lg shadow-md shadow-emerald-100 shrink-0">
+                    ✨
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-emerald-950 text-xs">AI Recommendation</h4>
+                    <p className="text-[11px] text-emerald-700">Recommended specialty: <strong>{recommendedSpecialty}</strong></p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setActiveSpec(recommendedSpecialty);
+                  }}
+                  className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3.5 py-2 rounded-xl transition shadow-md shadow-emerald-600/10"
+                >
+                  View Doctors
+                </button>
+              </div>
+            )}
+
+            {/* Quick Chips */}
+            {aiMessages.length === 1 && (
+              <div className="mb-4">
+                <p className="text-[10px] text-gray-400 mb-2 font-bold uppercase tracking-[.06em]">Common Symptom Queries:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Chest pain & shortness of breath",
+                    "Skin rash & itching",
+                    "Severe migraine headache",
+                    "Stomach ache & indigestion",
+                    "Persistent cough & fever"
+                  ].map((symptom) => (
+                    <button
+                      key={symptom}
+                      onClick={() => setAIInput(symptom)}
+                      className="text-[11px] bg-white hover:bg-indigo-50 hover:text-indigo-600 text-gray-600 border border-gray-200 rounded-xl px-3 py-1.5 transition duration-150 font-medium shadow-sm hover:border-indigo-100"
+                    >
+                      {symptom}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Input Bar */}
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                className="w-full pl-4 pr-14 py-3.5 rounded-2xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-xs transition bg-white shadow-sm"
+                placeholder="Describe your symptoms in detail..."
+                value={aiInput}
+                onChange={(e) => setAIInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAISubmit()}
+                disabled={aiLoading}
+              />
+              <button
+                onClick={handleAISubmit}
+                disabled={aiLoading || !aiInput.trim()}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-[#0c1220] hover:bg-[#1e293b] disabled:bg-gray-200 text-white p-2 rounded-xl transition shadow-md disabled:shadow-none"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </button>
             </div>
           </div>
+
         </div>
       </div>
 

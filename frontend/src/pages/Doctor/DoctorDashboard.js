@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { authAPI, appointmentAPI, leaveAPI } from '../../utils/api';
+import { authAPI, appointmentAPI, leaveAPI, aiAPI } from '../../utils/api';
 import toast from 'react-hot-toast';
 
 const DoctorDashboard = () => {
@@ -19,6 +19,71 @@ const DoctorDashboard = () => {
   const [loadingLeaves, setLoadingLeaves] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ startDate: '', endDate: '', reason: '' });
   const [submittingLeave, setSubmittingLeave] = useState(false);
+
+  // AI Chatbot state
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', content: "Hello! 👋 I'm MedAssist, your AI medical triage assistant. Describe the patient's symptoms and I'll recommend the right specialist.", timestamp: new Date() }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, chatLoading]);
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userText = chatInput.trim();
+    setChatInput('');
+    setChatLoading(true);
+
+    const userMsg = { role: 'user', content: userText, timestamp: new Date() };
+    setChatMessages(prev => [...prev, userMsg]);
+
+    // Build conversation history for the API
+    const apiMessages = chatMessages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({ role: m.role, content: m.content }));
+    apiMessages.push({ role: 'user', content: userText });
+
+    try {
+      const res = await aiAPI.ollamaChat(apiMessages);
+      const reply = res.data?.message || 'Sorry, I could not process that. Please try again.';
+      const recommendation = res.data?.recommendation || null;
+
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: reply,
+        recommendation,
+        timestamp: new Date()
+      }]);
+    } catch (err) {
+      console.error('AI Chat error:', err);
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '⚠️ Unable to connect to the AI service. Please ensure the AI server is running.',
+        timestamp: new Date()
+      }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const clearChat = () => {
+    setChatMessages([
+      { role: 'assistant', content: "Hello! 👋 I'm MedAssist, your AI medical triage assistant. Describe the patient's symptoms and I'll recommend the right specialist.", timestamp: new Date() }
+    ]);
+  };
+
+  const getUrgencyStyle = (urgency) => {
+    switch (urgency) {
+      case 'emergency': return { bg: '#ffebee', color: '#c62828', label: '🚨 EMERGENCY' };
+      case 'urgent': return { bg: '#fff3e0', color: '#e65100', label: '⚠️ URGENT' };
+      case 'soon': return { bg: '#fffde7', color: '#f9a825', label: '📅 See Soon' };
+      default: return { bg: '#e8f5e9', color: '#2e7d32', label: '✅ Routine' };
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'appointments') fetchAppointments();
@@ -93,6 +158,7 @@ const DoctorDashboard = () => {
   const TABS = [
     { id: 'overview', label: '🏠 Overview' },
     { id: 'appointments', label: '📅 Appointments' },
+    { id: 'aibot', label: '🤖 AI Assistant' },
     { id: 'leaves', label: '🏖️ Leave Requests' },
     { id: 'profile', label: '👤 My Profile' },
     { id: 'security', label: '🔒 Security' },
@@ -150,6 +216,167 @@ const DoctorDashboard = () => {
                 <div style={styles.infoItem}><span style={styles.iLabel}>Status</span><span style={{ ...styles.badge, background: '#e8f5e9', color: '#2e7d32' }}>Active</span></div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'aibot' && (
+          <div style={{ height: 'calc(100vh - 5rem)', display: 'flex', flexDirection: 'column' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <h1 style={styles.title}>AI Symptom Assistant</h1>
+                <p style={{ ...styles.subtitle, marginBottom: 0 }}>Describe patient symptoms to get specialist recommendations powered by AI.</p>
+              </div>
+              <button onClick={clearChat} style={styles.clearChatBtn} id="clear-chat-btn">
+                🗑️ New Chat
+              </button>
+            </div>
+
+            {/* Chat Container */}
+            <div style={styles.chatContainer} id="ai-chat-container">
+              {/* Messages Area */}
+              <div style={styles.chatMessages} id="ai-chat-messages">
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                    marginBottom: '1rem',
+                    animation: 'fadeInUp 0.3s ease-out'
+                  }}>
+                    {msg.role === 'assistant' && (
+                      <div style={styles.botAvatar}>🤖</div>
+                    )}
+                    <div style={{
+                      maxWidth: '70%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem'
+                    }}>
+                      <div style={msg.role === 'user' ? styles.userBubble : styles.botBubble}>
+                        <p style={{ margin: 0, lineHeight: '1.6', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                      </div>
+
+                      {/* Recommendation Card */}
+                      {msg.recommendation && (
+                        <div style={styles.recCard}>
+                          <div style={styles.recHeader}>
+                            <span style={{ fontSize: '1.5rem' }}>{msg.recommendation.icon || '🩺'}</span>
+                            <div>
+                              <div style={styles.recSpecialty}>{msg.recommendation.specialty_name}</div>
+                              <div style={styles.recReason}>{msg.recommendation.reason}</div>
+                            </div>
+                          </div>
+                          <div style={styles.recBadges}>
+                            {(() => {
+                              const u = getUrgencyStyle(msg.recommendation.urgency);
+                              return (
+                                <span style={{ ...styles.recBadge, background: u.bg, color: u.color }}>{u.label}</span>
+                              );
+                            })()}
+                            <span style={{
+                              ...styles.recBadge,
+                              background: msg.recommendation.confidence === 'high' ? '#e8f5e9' : msg.recommendation.confidence === 'medium' ? '#fff3e0' : '#ffebee',
+                              color: msg.recommendation.confidence === 'high' ? '#2e7d32' : msg.recommendation.confidence === 'medium' ? '#e65100' : '#c62828'
+                            }}>
+                              {msg.recommendation.confidence === 'high' ? '🎯' : msg.recommendation.confidence === 'medium' ? '🔍' : '❓'} {msg.recommendation.confidence?.toUpperCase()} confidence
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: '0.7rem', color: '#adb5bd', padding: '0 0.25rem' }}>
+                        {msg.timestamp?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    {msg.role === 'user' && (
+                      <div style={styles.userAvatar}>{user?.firstName?.[0] || 'D'}</div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Typing Indicator */}
+                {chatLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                    <div style={styles.botAvatar}>🤖</div>
+                    <div style={{ ...styles.botBubble, display: 'flex', alignItems: 'center', gap: '6px', padding: '1rem 1.25rem' }}>
+                      <span style={styles.typingDot1}></span>
+                      <span style={styles.typingDot2}></span>
+                      <span style={styles.typingDot3}></span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Quick Suggestions */}
+              {chatMessages.length <= 1 && (
+                <div style={styles.quickSuggestions}>
+                  {[
+                    '🤕 Patient has persistent headaches and dizziness',
+                    '💓 Patient complains of chest tightness and palpitations',
+                    '🦴 Patient has severe lower back pain for 2 weeks',
+                    '🤧 Patient has recurring skin rashes and itching'
+                  ].map((suggestion, idx) => (
+                    <button
+                      key={idx}
+                      style={styles.suggestionBtn}
+                      onClick={() => { setChatInput(suggestion.slice(2).trim()); }}
+                      id={`suggestion-btn-${idx}`}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Input Area */}
+              <div style={styles.chatInputArea}>
+                <input
+                  style={styles.chatInput}
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
+                  placeholder="Describe the patient's symptoms..."
+                  disabled={chatLoading}
+                  id="ai-chat-input"
+                />
+                <button
+                  style={{ ...styles.chatSendBtn, ...(chatLoading || !chatInput.trim() ? styles.chatSendBtnDisabled : {}) }}
+                  onClick={sendChatMessage}
+                  disabled={chatLoading || !chatInput.trim()}
+                  id="ai-chat-send-btn"
+                >
+                  {chatLoading ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={styles.spinnerSmall}></span>
+                    </span>
+                  ) : '➤'}
+                </button>
+              </div>
+            </div>
+
+            {/* Inline keyframes via style tag */}
+            <style>{`
+              @keyframes chatPulse {
+                0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+                40% { transform: scale(1); opacity: 1; }
+              }
+              @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+              #ai-chat-input:focus {
+                border-color: #1565c0 !important;
+                box-shadow: 0 0 0 3px rgba(21,101,192,0.12) !important;
+              }
+              .suggestion-hover:hover {
+                background: linear-gradient(135deg, #e3f2fd, #f3e5f5) !important;
+                transform: translateY(-1px) !important;
+              }
+            `}</style>
           </div>
         )}
 
@@ -412,6 +639,195 @@ const styles = {
   badge: { padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600', display: 'inline-block' },
   th: { padding: '1rem', color: '#495057', fontWeight: '600', fontSize: '0.9rem' },
   td: { padding: '1rem', color: '#1a1a2e', fontSize: '0.9rem' },
+
+  // AI Chatbot styles
+  chatContainer: {
+    flex: 1,
+    background: '#fff',
+    borderRadius: '20px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    border: '1px solid rgba(0,0,0,0.06)',
+  },
+  chatMessages: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '1.5rem 1.5rem 0.5rem',
+    background: 'linear-gradient(180deg, #f8f9ff 0%, #ffffff 100%)',
+  },
+  botAvatar: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '1rem',
+    flexShrink: 0,
+    marginRight: '0.75rem',
+    marginTop: '2px',
+    boxShadow: '0 3px 12px rgba(102,126,234,0.3)',
+  },
+  userAvatar: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #0d7377, #14a085)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    color: '#fff',
+    flexShrink: 0,
+    marginLeft: '0.75rem',
+    marginTop: '2px',
+    boxShadow: '0 3px 12px rgba(13,115,119,0.3)',
+  },
+  botBubble: {
+    background: '#f0f2f8',
+    borderRadius: '4px 18px 18px 18px',
+    padding: '0.85rem 1.15rem',
+    color: '#1a1a2e',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+  },
+  userBubble: {
+    background: 'linear-gradient(135deg, #1565c0, #0d7377)',
+    borderRadius: '18px 4px 18px 18px',
+    padding: '0.85rem 1.15rem',
+    color: '#fff',
+    boxShadow: '0 3px 12px rgba(21,101,192,0.2)',
+  },
+  recCard: {
+    background: 'linear-gradient(135deg, #f8f9ff, #f3f0ff)',
+    border: '1.5px solid #e0d6ff',
+    borderRadius: '16px',
+    padding: '1.15rem',
+    boxShadow: '0 4px 16px rgba(102,126,234,0.1)',
+  },
+  recHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '0.75rem',
+    marginBottom: '0.75rem',
+  },
+  recSpecialty: {
+    fontWeight: '700',
+    fontSize: '1rem',
+    color: '#1a1a2e',
+  },
+  recReason: {
+    fontSize: '0.82rem',
+    color: '#6c757d',
+    marginTop: '0.2rem',
+    lineHeight: '1.4',
+  },
+  recBadges: {
+    display: 'flex',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
+  },
+  recBadge: {
+    padding: '0.3rem 0.75rem',
+    borderRadius: '20px',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    display: 'inline-block',
+  },
+  quickSuggestions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.6rem',
+    padding: '0 1.5rem 1rem',
+    borderTop: '1px solid #f0f0f0',
+    paddingTop: '1rem',
+  },
+  suggestionBtn: {
+    padding: '0.55rem 1rem',
+    borderRadius: '20px',
+    border: '1.5px solid #e0e0e0',
+    background: '#fafafa',
+    color: '#495057',
+    fontSize: '0.82rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    fontWeight: '500',
+  },
+  chatInputArea: {
+    display: 'flex',
+    gap: '0.75rem',
+    padding: '1rem 1.5rem',
+    borderTop: '1px solid #f0f0f0',
+    background: '#fff',
+    alignItems: 'center',
+  },
+  chatInput: {
+    flex: 1,
+    padding: '0.85rem 1.15rem',
+    borderRadius: '14px',
+    border: '2px solid #e9ecef',
+    fontSize: '0.9rem',
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
+    fontFamily: "'Segoe UI', sans-serif",
+    background: '#fafbfc',
+  },
+  chatSendBtn: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '14px',
+    border: 'none',
+    background: 'linear-gradient(135deg, #1565c0, #0d7377)',
+    color: '#fff',
+    fontSize: '1.2rem',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    boxShadow: '0 4px 14px rgba(21,101,192,0.3)',
+    transition: 'transform 0.15s, box-shadow 0.15s',
+  },
+  chatSendBtnDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+    boxShadow: 'none',
+  },
+  clearChatBtn: {
+    padding: '0.6rem 1.25rem',
+    background: 'linear-gradient(135deg, #f5f5f5, #e8e8e8)',
+    color: '#495057',
+    border: '1px solid #dee2e6',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s',
+    flexShrink: 0,
+  },
+  typingDot1: {
+    width: '8px', height: '8px', borderRadius: '50%', background: '#6c757d',
+    animation: 'chatPulse 1.4s infinite ease-in-out',
+    animationDelay: '0s',
+  },
+  typingDot2: {
+    width: '8px', height: '8px', borderRadius: '50%', background: '#6c757d',
+    animation: 'chatPulse 1.4s infinite ease-in-out',
+    animationDelay: '0.2s',
+  },
+  typingDot3: {
+    width: '8px', height: '8px', borderRadius: '50%', background: '#6c757d',
+    animation: 'chatPulse 1.4s infinite ease-in-out',
+    animationDelay: '0.4s',
+  },
+  spinnerSmall: {
+    width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)',
+    borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite',
+    display: 'inline-block',
+  },
 };
 
 export default DoctorDashboard;
