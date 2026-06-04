@@ -5,7 +5,7 @@
 // Updated to use navigate for appointment booking
 
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const API_BASE = "/api";
 
@@ -32,6 +32,53 @@ const SPEC_ICONS = {
   "Rheumatology":"🦾","Surgery (General)":"🔪","Surgery (Cardiothoracic)":"❤️‍🔥",
   "Surgery (Neurosurgery)":"🧠","Surgery (Orthopedic)":"🦵","Surgery (Plastic)":"💎","Urology":"💧",
 };
+
+const DOCTOR_CATEGORIES = [
+  { name: "Cardiology", slug: "cardiology", description: "Heart and cardiovascular diseases" },
+  { name: "Dermatology", slug: "dermatology", description: "Skin, hair and nail conditions" },
+  { name: "Neurology", slug: "neurology", description: "Brain, spine and nervous system" },
+  { name: "Orthopedics", slug: "orthopedic", description: "Bones, joints, muscles and ligaments" },
+  { name: "Gastroenterology", slug: "gastroenterologist", description: "Digestive system and stomach" },
+  { name: "Pediatrics", slug: "pediatrician", description: "Child health and development" },
+  { name: "Psychiatry", slug: "psychiatrist", description: "Mental health and psychiatric care" },
+  { name: "Ophthalmology", slug: "ophthalmologist", description: "Eyes and vision problems" },
+  { name: "Otolaryngology (ENT)", slug: "ent", description: "Ear, nose and throat conditions" },
+  { name: "Gynecology & Obstetrics", slug: "gynecologist", description: "Women’s reproductive health" },
+  { name: "Urology", slug: "urologist", description: "Urinary system and kidney health" },
+  { name: "General Practice", slug: "general", description: "Common illnesses and general checkups" },
+];
+
+const SLUG_TO_SPECIALIZATION = {
+  cardiology: "Cardiology",
+  cardiologist: "Cardiology",
+  dermatology: "Dermatology",
+  dermatologist: "Dermatology",
+  neurology: "Neurology",
+  neurologist: "Neurology",
+  orthopedic: "Orthopedics",
+  orthopedics: "Orthopedics",
+  gastroenterology: "Gastroenterology",
+  gastroenterologist: "Gastroenterology",
+  pediatrician: "Pediatrics",
+  psychiatry: "Psychiatry",
+  psychiatrist: "Psychiatry",
+  ophthalmology: "Ophthalmology",
+  ophthalmologist: "Ophthalmology",
+  ent: "Otolaryngology (ENT)",
+  gynecology: "Gynecology & Obstetrics",
+  gynecologist: "Gynecology & Obstetrics",
+  urologist: "Urology",
+  general: "General Practice",
+};
+
+const SYSTEM_PROMPT = `You are a medical assistant for a doctor booking app.
+Ask the patient for symptoms, follow up when needed, then recommend one of the categories below.
+Use this exact format at the end of your message:
+[RECOMMEND:CategoryName]
+
+Categories:
+${DOCTOR_CATEGORIES.map((d) => `- ${d.name}: ${d.description}`).join("\n")}
+`;
 
 const AVATAR_COLORS = [
   "#6366f1","#8b5cf6","#ec4899","#ef4444","#f97316",
@@ -84,14 +131,30 @@ const initials = (n) =>
 // Main Page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DoctorsPage() {
-  const [doctors, setDoctors]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [search, setSearch]         = useState("");
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [activeSpec, setActiveSpec] = useState("All");
-  const [selected, setSelected]     = useState(null);
-  const [view, setView]             = useState("grid");
+  const [selected, setSelected] = useState(null);
+  const [view, setView] = useState("grid");
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [aiInput, setAIInput] = useState("");
+  const [aiLoading, setAILoading] = useState(false);
+  const [aiMessages, setAIMessages] = useState([
+    { role: "assistant", text: "Tell me your symptoms and I will recommend the right doctor category." },
+  ]);
+  const [recommendedSpecialty, setRecommendedSpecialty] = useState(null);
 
   useEffect(() => {
+    const specialty = searchParams.get('specialty');
+    if (specialty) {
+      const mapped = SLUG_TO_SPECIALIZATION[specialty.toLowerCase()];
+      if (mapped) {
+        setActiveSpec(mapped);
+      }
+    }
+
     const load = async () => {
       try {
         const res  = await fetch(`${API_BASE}/users/doctors/public?limit=100`);
@@ -103,8 +166,9 @@ export default function DoctorsPage() {
         setLoading(false);
       }
     };
+
     load();
-  }, []);
+  }, [searchParams]);
 
   const specializations = useMemo(() => {
     const s = new Set(doctors.map((d) => d.specialization));
@@ -112,6 +176,7 @@ export default function DoctorsPage() {
   }, [doctors]);
 
   const navigate = useNavigate();
+
   const filtered = useMemo(() => {
     return doctors.filter((d) => {
       const q = search.toLowerCase();
@@ -125,6 +190,71 @@ export default function DoctorsPage() {
       return matchSearch && matchSpec;
     });
   }, [doctors, search, activeSpec]);
+
+  const parseRecommendation = (text) => {
+    const jsonMatch = text.match(/RECOMMENDATION_JSON:\s*(\{[^}]+\})/s);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        return parsed;
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+    const bracketMatch = text.match(/\[RECOMMEND:([^\]]+)\]/);
+    if (bracketMatch) {
+      return { specialty_name: bracketMatch[1].trim() };
+    }
+    return null;
+  };
+
+  const readSpecialization = (recommendation) => {
+    if (!recommendation) return null;
+    const rawName = recommendation.specialty_name || recommendation.name || recommendation.specialty_id;
+    if (!rawName) return null;
+    const normalized = rawName.toString().trim();
+    const lower = normalized.toLowerCase();
+    if (SLUG_TO_SPECIALIZATION[lower]) return SLUG_TO_SPECIALIZATION[lower];
+    if (normalized === 'General Practitioner (GP)') return 'General Practice';
+    return normalized;
+  };
+
+  const handleAISubmit = async () => {
+    if (!aiInput.trim() || aiLoading) return;
+
+    const userText = aiInput.trim();
+    const newHistory = [
+      ...aiMessages.map((msg) => ({ role: msg.role, content: msg.text })),
+      { role: 'user', content: userText },
+    ];
+
+    setAIInput("");
+    setAILoading(true);
+    setAIMessages((prev) => [...prev, { role: 'user', text: userText }]);
+
+    try {
+      const res = await fetch(`${API_BASE}/ai/symptom-check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: newHistory, systemPrompt: SYSTEM_PROMPT }),
+      });
+      const data = await res.json();
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not get a recommendation right now.';
+      const recommendation = parseRecommendation(reply);
+      const specialization = readSpecialization(recommendation);
+      setAIMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
+      if (specialization) {
+        setRecommendedSpecialty(specialization);
+        setActiveSpec(specialization);
+        setSearchParams({ specialty: Object.keys(SLUG_TO_SPECIALIZATION).find((key) => SLUG_TO_SPECIALIZATION[key] === specialization) || '' }, { replace: true });
+      }
+    } catch (err) {
+      console.error(err);
+      setAIMessages((prev) => [...prev, { role: 'assistant', text: 'There was an error reaching the AI service. Please try again later.' }]);
+    } finally {
+      setAILoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fafaf8] font-sans">
@@ -178,6 +308,60 @@ export default function DoctorsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+      </div>
+
+      {/* ── AI Symptom Recommender ── */}
+      <div className="mx-auto max-w-[1200px] px-6 py-12 md:px-6">
+        <div className="grid gap-6 rounded-[28px] bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,.06)] md:grid-cols-[1.5fr_1fr]">
+          <div>
+            <div className="mb-3 text-sm font-semibold uppercase tracking-[.24em] text-[#0c1220]/60">
+              Need help choosing a specialist?
+            </div>
+            <h2 className="mb-4 text-3xl font-bold text-[#0c1220]" style={{ fontFamily: "'Fraunces', serif" }}>
+              Tell us your symptoms and get the right doctor category.
+            </h2>
+            <p className="mb-6 text-sm leading-relaxed text-gray-500">
+              Use the symptom assistant to find the best specialty, then view the filtered doctors below.
+            </p>
+            <textarea
+              className="w-full resize-none rounded-3xl border border-[#e8e8e4] bg-[#fafaf8] p-4 text-sm text-[#0c1220] outline-none focus:border-[#0c1220]"
+              rows={5}
+              placeholder="E.g. I have chest pain and shortness of breath, especially when I climb stairs..."
+              value={aiInput}
+              onChange={(e) => setAIInput(e.target.value)}
+            />
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                className="rounded-full bg-[#0c1220] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b]"
+                onClick={handleAISubmit}
+                disabled={aiLoading}
+              >
+                {aiLoading ? 'Analyzing...' : 'Recommend a specialty'}
+              </button>
+              {recommendedSpecialty && (
+                <span className="rounded-full border border-[#0c1220] bg-[#e2e8f0] px-4 py-2 text-sm font-semibold text-[#0c1220]">
+                  Showing {recommendedSpecialty} doctors
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] bg-[#0f172a] p-6 text-white">
+            <div className="mb-4 text-sm font-semibold uppercase tracking-[.24em] text-white/60">
+              AI Conversation
+            </div>
+            <div className="space-y-4 overflow-hidden rounded-[24px] border border-white/10 bg-[#111827] p-4">
+              {aiMessages.map((msg, index) => (
+                <div key={index} className={`rounded-3xl p-4 ${msg.role === 'assistant' ? 'bg-white/10' : 'bg-white/10/60'} ${msg.role === 'assistant' ? 'text-white' : 'text-[#0c1220]'}`}>
+                  <div className="mb-2 text-xs uppercase tracking-[.3em] text-white/50">
+                    {msg.role === 'assistant' ? 'AI' : 'You'}
+                  </div>
+                  <div className="whitespace-pre-line text-sm leading-6 text-white/90">{msg.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
